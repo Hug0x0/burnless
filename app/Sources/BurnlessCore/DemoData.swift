@@ -30,7 +30,11 @@ public enum DemoData {
         rows.append(
           UsageRow(
             source: .claude, date: key, model: model, inputTokens: input, outputTokens: output,
-            cacheWriteTokens: cacheWrite, cacheReadTokens: cacheRead, costUSD: cost))
+            cacheWriteTokens: cacheWrite, cacheReadTokens: cacheRead, costUSD: cost,
+            costBreakdown: CostBreakdown(
+              input: Double(input) * rate / 1_000_000, output: Double(output) * rate * 5 / 1_000_000,
+              cacheWrite: Double(cacheWrite) * rate * 1.25 / 1_000_000,
+              cacheRead: Double(cacheRead) * rate * 0.1 / 1_000_000)))
       }
       for (index, model) in codexModels.enumerated()
       where Double.random(in: 0...1, using: &generator) < [0.75, 0.35][index] {
@@ -44,7 +48,10 @@ public enum DemoData {
         rows.append(
           UsageRow(
             source: .codex, date: key, model: model, inputTokens: input, outputTokens: output,
-            cacheReadTokens: cacheRead, reasoningTokens: output / 3, costUSD: cost))
+            cacheReadTokens: cacheRead, reasoningTokens: output / 3, costUSD: cost,
+            costBreakdown: CostBreakdown(
+              input: Double(input) * rate / 1_000_000, output: Double(output) * rate * 8 / 1_000_000,
+              cacheRead: Double(cacheRead) * rate * 0.1 / 1_000_000)))
       }
     }
     // One unpriced model so partial-estimate states are visible in demos.
@@ -59,12 +66,96 @@ public enum DemoData {
         status: SourceStatus(id: harness, state: .ok, paths: ["Demo data"]), lastSuccess: now,
         isStale: false)
     }
+    let images = (0..<10).compactMap { offset -> ImageDay? in
+      guard offset % 3 == 0, let key = calendar.adding(days: -offset, to: today) else { return nil }
+      return ImageDay(date: key, count: 2 + offset / 3)
+    }
     return UsageSnapshot(
       rows: rows, sources: sources,
       pricing: PricingInfo(
         provider: "Demo prices", ccusageRevision: "demo", litellmRevision: "demo",
         snapshotDate: "demo", online: false),
-      refreshedAt: now, timezone: calendar.calendar.timeZone.identifier, isDemo: true)
+      refreshedAt: now, timezone: calendar.calendar.timeZone.identifier, isDemo: true,
+      codexImages: images)
+  }
+}
+
+extension DemoData {
+  /// Plans, limit meters and a few days of readings, all generated.
+  public static func quota(now: Date) -> (report: QuotaReport, history: QuotaHistory) {
+    var generator = SeededGenerator(seed: 7)
+    let ms = { (date: Date) in date.timeIntervalSince1970 * 1000 }
+    let hour: TimeInterval = 3600
+    let claudeReset = now.addingTimeInterval(3.6 * 86_400)
+    let sessionReset = now.addingTimeInterval(2.3 * hour)
+    let codexReset = now.addingTimeInterval(2.9 * 86_400)
+    var history = QuotaHistory()
+
+    /// Readings every `step` from the window start, following `curve` (0...1 of
+    /// the final value) with small random wobble.
+    func record(
+      _ series: QuotaSeries, reset: Date, minutes: Double, used: Double, step: TimeInterval,
+      curve: (Double) -> Double
+    ) {
+      let start = reset.addingTimeInterval(-minutes * 60)
+      var time = start.addingTimeInterval(step)
+      var last = 0.0
+      while time <= now {
+        let progress = time.timeIntervalSince(start) / now.timeIntervalSince(start)
+        let value = min(100, max(last, used * curve(progress) + Double.random(in: 0...0.6, using: &generator)))
+        last = value
+        history.record(
+          QuotaReading(observedAt: time, usedPercent: value, windowMinutes: minutes, resetsAt: reset, source: "live"),
+          series: series)
+        time = time.addingTimeInterval(step)
+      }
+      history.record(
+        QuotaReading(observedAt: now, usedPercent: used, windowMinutes: minutes, resetsAt: reset, source: "live"),
+        series: series)
+    }
+
+    record(.claudeWeekly, reset: claudeReset, minutes: 10080, used: 38, step: hour) { pow($0, 1.3) }
+    record(.claudeSession, reset: sessionReset, minutes: 300, used: 62, step: 600) { pow($0, 0.8) }
+    record(.codexWeekly, reset: codexReset, minutes: 10080, used: 64, step: hour) { $0 < 0.5 ? $0 * 0.7 : 0.35 + ($0 - 0.5) * 1.3 }
+
+    let days = (0..<7).reversed().compactMap { offset -> LimitUsageDay? in
+      let date = now.addingTimeInterval(-Double(offset) * 86_400)
+      let parts = date.formatted(.iso8601.year().month().day())
+      let cli = Double.random(in: 2...9, using: &generator)
+      let desktop = Double.random(in: 0...5, using: &generator)
+      let web = Double.random(in: 0...2, using: &generator)
+      return LimitUsageDay(
+        date: parts, usedPercent: cli + desktop + web,
+        surfaces: [
+          LimitUsageSurface(surface: "cli", usedPercent: cli),
+          LimitUsageSurface(surface: "desktop_app", usedPercent: desktop),
+          LimitUsageSurface(surface: "web", usedPercent: web),
+        ],
+        models: [
+          LimitUsageModel(model: "demo-gpt-large", speed: "standard", usedPercent: cli + web),
+          LimitUsageModel(model: "demo-gpt-mini", speed: "standard", usedPercent: desktop),
+        ])
+    }
+    let report = QuotaReport(
+      generatedAtMs: ms(now),
+      claude: ClaudeQuota(
+        planTier: "default_claude_max_5x",
+        account: ClaudeAccount(
+          source: "live", observedAtMs: ms(now),
+          session: LimitWindow(usedPercent: 62, windowMinutes: 300, resetsAtMs: ms(sessionReset)),
+          weekly: LimitWindow(usedPercent: 38, windowMinutes: 10080, resetsAtMs: ms(claudeReset)),
+          scoped: [ScopedLimit(name: "Demo Opus", usedPercent: 47, resetsAtMs: ms(claudeReset))],
+          extra: ExtraUsage(enabled: true, usedUSD: 12.4, limitUSD: 50)),
+        live: LiveStatus(state: .ok)),
+      codex: CodexQuota(
+        planType: "plus",
+        snapshot: CodexSnapshot(
+          source: "live", observedAtMs: ms(now),
+          weekly: LimitWindow(usedPercent: 64, windowMinutes: 10080, resetsAtMs: ms(codexReset)),
+          short: LimitWindow(usedPercent: 18, windowMinutes: 300, resetsAtMs: ms(now.addingTimeInterval(3 * hour))),
+          resetCreditsAvailable: 1),
+        limitUsageDaily: days, live: LiveStatus(state: .ok)))
+    return (report, history)
   }
 }
 
