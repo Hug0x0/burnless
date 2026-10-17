@@ -20,7 +20,7 @@ mkdir -p dist
 staging="$(mktemp -d "$root/dist-staging.XXXXXX")"
 trap 'trash "$staging" 2>/dev/null || true' EXIT
 app="$staging/Burnless.app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Library/LaunchAgents"
 cp "$bin/Burnless" "$app/Contents/MacOS/Burnless"
 cp engine/target/release/burnless-engine "$app/Contents/Resources/burnless-engine"
 ditto "$bin/Burnless_Burnless.bundle" "$app/Contents/Resources/Burnless_Burnless.bundle"
@@ -28,6 +28,24 @@ cp app/Sources/Burnless/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.
 cp LICENSE "$app/Contents/Resources/LICENSE.txt"
 cp THIRD_PARTY_NOTICES.md "$app/Contents/Resources/THIRD_PARTY_NOTICES.md"
 cp engine/pricing/LITELLM-LICENSE.txt "$app/Contents/Resources/LITELLM-LICENSE.txt"
+
+# Optional background quota collection (Settings → Background), registered
+# with SMAppService.agent only when the user turns it on.
+cat > "$app/Contents/Library/LaunchAgents/io.github.hug0x0.burnless.quota.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>io.github.hug0x0.burnless.quota</string>
+<key>BundleProgram</key><string>Contents/MacOS/Burnless</string>
+<key>ProgramArguments</key><array><string>Burnless</string><string>--collect-quotas</string></array>
+<key>StartInterval</key><integer>60</integer>
+<key>RunAtLoad</key><true/>
+<key>ProcessType</key><string>Background</string>
+<key>LowPriorityIO</key><true/>
+<key>Nice</key><integer>10</integer>
+<key>AssociatedBundleIdentifiers</key><array><string>io.github.hug0x0.burnless</string></array>
+</dict></plist>
+PLIST
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
