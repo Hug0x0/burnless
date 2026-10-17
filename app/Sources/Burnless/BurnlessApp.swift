@@ -3,48 +3,77 @@ import BurnlessCore
 import SwiftUI
 
 @main
+enum BurnlessMain {
+  static func main() {
+    // launchd runs the bundled binary with this flag for background collection.
+    if CommandLine.arguments.contains("--collect-quotas") {
+      exit(QuotaCollector.collectOnce())
+    }
+    BurnlessApp.main()
+  }
+}
+
 struct BurnlessApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
   @State private var store: UsageStore
+  // Bound through UserDefaults: binding the observable store here makes
+  // SwiftUI rebuild the scenes (and the main menu) in a loop.
+  @AppStorage("showInMenuBar") private var showInMenuBar = true
 
   init() {
     let arguments = ProcessInfo.processInfo.arguments
-    let demo =
-      arguments.contains("--demo") || ProcessInfo.processInfo.environment["BURNLESS_DEMO"] == "1"
+    let environment = ProcessInfo.processInfo.environment
+    let demo = arguments.contains("--demo") || environment["BURNLESS_DEMO"] == "1"
     let store = UsageStore(isDemo: demo)
     // Launch options for screenshots and checks. Environment variables, not
     // arguments: AppKit treats bare arguments as documents to open.
-    let environment = ProcessInfo.processInfo.environment
     switch environment["BURNLESS_ROUTE"] {
     case "claude": store.route = .harness(.claude)
     case "codex": store.route = .harness(.codex)
-    case "settings": store.route = .settings
     default: break
     }
     if let period = environment["BURNLESS_PERIOD"].flatMap(Period.init(rawValue:)) {
       store.period = period
     }
     _store = State(initialValue: store)
+    // Started here rather than from a window, so menu-bar-only mode and the
+    // menu bar extra work without the dashboard open.
+    Task { @MainActor in store.start() }
   }
 
   var body: some Scene {
     Window("Burnless", id: "dashboard") {
-      MainView()
-        .environment(store)
-        .task { store.start() }
+      MainView().environment(store)
     }
-    .defaultSize(width: 1180, height: 820)
+    .defaultSize(width: 1240, height: 860)
     .windowToolbarStyle(.unified)
     .commands {
-      CommandGroup(after: .toolbar) {
-        Button("Refresh") { store.refresh() }
+      CommandGroup(after: .appInfo) {
+        Button("Check for Updates…") { Task { await UpdateChecker.shared.check() } }
+      }
+      CommandMenu("Usage") {
+        Button("Refresh") { store.refreshAll() }
           .keyboardShortcut("r")
           .disabled(store.isDemo)
+        Button("Check Limits Now") { store.checkQuotas(hard: true) }
+          .keyboardShortcut("r", modifiers: [.command, .shift])
+          .disabled(store.isDemo)
       }
-      CommandGroup(replacing: .appSettings) {
-        Button("Settings…") { store.route = .settings }
-          .keyboardShortcut(",")
-      }
+    }
+    MenuBarExtra(isInserted: $showInMenuBar) {
+      MenuPopover().environment(store)
+    } label: {
+      MenuBarLabel(remaining: store.remaining(store.settings.menuBarQuota))
+    }
+    .menuBarExtraStyle(.window)
+    // Screenshots of the menu bar popover render it in a plain window.
+    Window("Burnless menu", id: "popover-preview") {
+      MenuPopover().environment(store)
+    }
+    .windowResizability(.contentSize)
+    Settings {
+      SettingsView(initialTab: SettingsTab(rawValue: ProcessInfo.processInfo.environment["BURNLESS_SETTINGS_TAB"] ?? "") ?? .general)
+        .environment(store)
     }
   }
 }
@@ -59,68 +88,123 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     {
       NSApp.applicationIconImage = image
     }
-    NSApp.setActivationPolicy(.regular)
-    NSApp.activate(ignoringOtherApps: true)
+    let defaults = UserDefaults.standard
+    let menuBarOnly = defaults.bool(forKey: "menuBarOnly") && (defaults.object(forKey: "showInMenuBar") as? Bool ?? true)
+    if menuBarOnly && !WindowCapture.isActive {
+      NSApp.setActivationPolicy(.accessory)
+      DispatchQueue.main.async {
+        for window in NSApp.windows where window.identifier?.rawValue.contains("dashboard") == true {
+          window.orderOut(nil)
+        }
+      }
+    } else {
+      NSApp.setActivationPolicy(.regular)
+      NSApp.activate(ignoringOtherApps: true)
+    }
     WindowCapture.scheduleIfRequested()
   }
 
-  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+  /// With the menu bar extra, closing the window keeps Burnless running.
+  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    !(UserDefaults.standard.object(forKey: "showInMenuBar") as? Bool ?? true)
+  }
 }
 
 struct MainView: View {
   @Environment(UsageStore.self) private var store
+  @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     NavigationSplitView {
       Sidebar()
-        .navigationSplitViewColumnWidth(min: 236, ideal: 244, max: 320)
+        .navigationSplitViewColumnWidth(min: 220, ideal: 236, max: 320)
     } detail: {
       VStack(spacing: 0) {
         ScrollView {
           Group {
             switch store.route {
-            case .settings: SettingsView()
             case .overview: DashboardView(harness: nil)
             case .harness(let harness): DashboardView(harness: harness)
             }
           }
           .id(store.route)
+          .transition(.opacity.combined(with: .offset(y: 8)))
           .padding(20)
           .frame(maxWidth: 1280)
           .frame(maxWidth: .infinity)
         }
+        .animation(.smooth(duration: 0.3), value: store.route)
         Divider()
         StatusFooter().padding(.horizontal, 18).padding(.vertical, 8)
       }
       .background(BurnTheme.background)
       .navigationTitle(store.route.title)
-      .navigationSubtitle(store.route == .settings ? "" : store.period.label)
+      .navigationSubtitle(store.period.label)
     }
-    .frame(minWidth: 720, minHeight: 520)
+    .frame(minWidth: 760, minHeight: 540)
     .tint(BurnTheme.ember)
+    .task {
+      let environment = ProcessInfo.processInfo.environment
+      if environment["BURNLESS_POPOVER"] == "1" { openWindow(id: "popover-preview") }
+      if environment["BURNLESS_ROUTE"] == "settings" { openSettings() }
+    }
     .toolbar {
-      if store.route != .settings {
-        ToolbarItem(placement: .primaryAction) {
-          @Bindable var store = store
-          Picker("Period", selection: $store.period) {
-            ForEach(Period.allCases) { Text($0.label).tag($0) }
-          }
-          .frame(width: 140)
-          .help("Spend period")
-          .accessibilityLabel("Period")
-        }
-      }
+      ToolbarItem(placement: .navigation) { QuotaSourceMenu() }
       ToolbarItem(placement: .primaryAction) {
+        @Bindable var store = store
+        Picker("Period", selection: $store.period) {
+          ForEach(Period.allCases) { Text($0.label).tag($0) }
+        }
+        .frame(width: 140)
+        .help("Spend period")
+        .accessibilityLabel("Period")
+      }
+      ToolbarItemGroup(placement: .primaryAction) {
         Button {
-          store.refresh()
+          store.refreshAll()
         } label: {
           Label("Refresh", systemImage: "arrow.clockwise")
             .symbolEffect(.pulse, isActive: store.isLoading)
         }
         .disabled(store.isDemo)
-        .help("Refresh usage (⌘R)")
+        .help("Refresh usage and limits (⌘R)")
+        Button {
+          store.checkQuotas(hard: true)
+        } label: {
+          Label("Check limits now", systemImage: "gauge.with.dots.needle.67percent")
+            .symbolEffect(.pulse, isActive: store.isCheckingQuotas)
+        }
+        .disabled(store.isDemo || store.isCheckingQuotas)
+        .help("Check limits now (⇧⌘R)")
+        SettingsLink { Label("Settings", systemImage: "gearshape") }.help("Settings")
       }
     }
+  }
+}
+
+/// Toolbar menu: the remaining weekly limit shown in the menu bar.
+private struct QuotaSourceMenu: View {
+  @Environment(UsageStore.self) private var store
+
+  var body: some View {
+    Menu {
+      ForEach(Harness.allCases) { harness in
+        Button {
+          store.settings.menuBarQuota = harness
+        } label: {
+          Text(harness.name + (store.remaining(harness).map { " · \(Int($0.rounded(.down)))% left" } ?? ""))
+        }
+      }
+    } label: {
+      Text(
+        store.remaining(store.settings.menuBarQuota).map { "\(Int($0.rounded(.down)))%" } ?? "Burn"
+      )
+      .monospacedDigit().fontWeight(.medium).fixedSize()
+    }
+    .menuIndicator(.visible)
+    .fixedSize()
+    .help("Weekly limit remaining shown in the menu bar (\(store.settings.menuBarQuota.name))")
   }
 }
 
@@ -134,38 +218,41 @@ private struct Sidebar: View {
   var body: some View {
     let all = store.dashboard(for: nil)
     List(selection: selection) {
-      row(.overview, title: "All harnesses", cost: store.snapshot == nil ? nil : all.totals) {
+      row(.overview, title: "Overview") {
         IconBadge(symbol: "flame.fill", size: 20)
+      } trailing: {
+        if store.snapshot != nil { spend(all.totals) }
       }
-      Section("Harnesses") {
+      Section("Subscriptions") {
         ForEach(Harness.allCases) { harness in
           let summary = all.harnesses.first { $0.harness == harness }
-          row(
-            .harness(harness), title: harness.name,
-            cost: summary?.availability.hasData == true ? summary?.totals : nil
-          ) {
+          row(.harness(harness), title: harness.name) {
             HarnessBadge(harness: harness, size: 20)
+          } trailing: {
+            if let remaining = store.remaining(harness) {
+              QuotaBadge(remaining: remaining).help("\(harness.name) weekly limit remaining")
+            } else if summary?.availability.hasData == true, let totals = summary?.totals {
+              spend(totals)
+            }
           }
         }
-      }
-      Section {
-        Label("Settings", systemImage: "gearshape").tag(Route.settings)
       }
     }
     .listStyle(.sidebar)
   }
 
-  private func row<Icon: View>(
-    _ route: Route, title: String, cost: SpendTotals?, @ViewBuilder icon: () -> Icon
+  private func spend(_ totals: SpendTotals) -> some View {
+    Text(Format.spend(totals)).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
+  }
+
+  private func row<Icon: View, Trailing: View>(
+    _ route: Route, title: String, @ViewBuilder icon: () -> Icon, @ViewBuilder trailing: () -> Trailing
   ) -> some View {
     HStack(spacing: 9) {
       icon()
       Text(title).lineLimit(1)
       Spacer(minLength: 6)
-      if let cost {
-        Text(Format.spend(cost)).font(.system(size: 11)).monospacedDigit()
-          .foregroundStyle(.secondary)
-      }
+      trailing()
     }
     .padding(.vertical, 2)
     .tag(route)
@@ -199,22 +286,19 @@ private struct StatusFooter: View {
         .padding(.leading, 6)
       }
       Spacer()
-      Text(appVersionText).monospacedDigit().accessibilityLabel("App version")
+      Text("v" + appVersion).monospacedDigit().accessibilityLabel("App version")
+      QuotaCheckButton()
       Button {
-        store.refresh()
+        store.refreshAll()
       } label: {
         Image(systemName: "arrow.clockwise").symbolEffect(.pulse, isActive: store.isLoading)
       }
       .buttonStyle(.plain)
       .disabled(store.isDemo || store.isLoading)
-      .help("Refresh usage (⌘R)")
+      .help("Refresh usage and limits (⌘R)")
       .accessibilityLabel("Refresh usage")
     }
     .font(.system(size: 11)).foregroundStyle(.secondary)
-  }
-
-  private var appVersionText: String {
-    "v" + ((Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev")
   }
 }
 
@@ -242,7 +326,8 @@ private struct StatusFooter: View {
       guard let view = mainWindow?.contentView,
         let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
       else {
-        FileHandle.standardError.write(Data("capture: no window\n".utf8))
+        let names = NSApp.windows.map { "\($0.identifier?.rawValue ?? "-") '\($0.title)' visible=\($0.isVisible)" }
+        FileHandle.standardError.write(Data(("capture: no window\n" + names.joined(separator: "\n") + "\n").utf8))
         return
       }
       view.cacheDisplay(in: view.bounds, to: rep)
@@ -254,7 +339,18 @@ private struct StatusFooter: View {
     }
   }
 
+  /// `BURNLESS_CAPTURE_WINDOW`: `settings`, `popover` or the dashboard (default).
   private static var mainWindow: NSWindow? {
-    NSApp.windows.first { $0.frame.width > 300 && $0.contentView != nil }
+    let target = ProcessInfo.processInfo.environment["BURNLESS_CAPTURE_WINDOW"] ?? "dashboard"
+    let visible = NSApp.windows.filter { $0.isVisible && $0.contentView != nil && $0.frame.width > 300 }
+    switch target {
+    case "settings":
+      return visible.first {
+        let id = $0.identifier?.rawValue ?? ""
+        return !id.contains("dashboard") && !id.contains("popover-preview")
+      }
+    case "popover": return visible.first { $0.identifier?.rawValue.contains("popover-preview") == true }
+    default: return visible.first { $0.identifier?.rawValue.contains("dashboard") == true } ?? visible.first
+    }
   }
 }
