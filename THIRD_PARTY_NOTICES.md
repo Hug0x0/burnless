@@ -81,3 +81,10 @@ The engine's other Rust dependencies (serde, serde_json, jiff, zstd, and the
 transitive crates locked in `engine/Cargo.lock`) are distributed under MIT
 and/or Apache-2.0 licenses. Run `cargo metadata --manifest-path engine/Cargo.toml`
 for the complete list.
+
+## Provider logos
+
+`app/Sources/Burnless/Resources/Brands/{claude,codex}.png` come from Agent Burn,
+which exported them from the installed Claude and ChatGPT macOS apps. They belong
+to Anthropic and OpenAI respectively and only identify the supported
+integrations; no endorsement is implied.

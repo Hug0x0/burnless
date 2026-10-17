@@ -11,7 +11,7 @@ let package = Package(
     .target(name: "BurnlessCore"),
     .executableTarget(
       name: "Burnless", dependencies: ["BurnlessCore"],
-      resources: [.copy("Resources/AppIcon.icns")]),
+      resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/Brands")]),
     .testTarget(name: "BurnlessCoreTests", dependencies: ["BurnlessCore"]),
   ]
 )

@@ -165,6 +165,7 @@ private struct SourceRow: View {
 
 struct StatusPill: View {
   let availability: SourceAvailability?
+  var label: String? = nil
   var body: some View {
     let (text, color): (String, Color) =
       switch availability {
@@ -176,7 +177,7 @@ struct StatusPill: View {
       }
     HStack(spacing: 5) {
       Circle().fill(color).frame(width: 6, height: 6)
-      Text(text).font(.system(size: 11, weight: .medium))
+      Text(label.map { "\($0) · \(text)" } ?? text).font(.system(size: 11, weight: .medium))
     }
     .foregroundStyle(color)
     .padding(.horizontal, 8).padding(.vertical, 3)

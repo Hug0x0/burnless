@@ -140,14 +140,22 @@ private struct MetricStrip: View {
         Divider()
         tokens
         Divider()
+        rate
+        Divider()
+        models
+        Divider()
         days
       }
-      VStack(alignment: .leading, spacing: 14) {
-        spend
-        Divider()
-        tokens
-        Divider()
-        days
+      Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 14) {
+        GridRow {
+          spend
+          tokens
+        }
+        GridRow {
+          rate
+          models
+        }
+        GridRow { days }
       }
     }
     .fixedSize(horizontal: false, vertical: true)
@@ -184,6 +192,25 @@ private struct MetricStrip: View {
         TokenPopover(tokens: dashboard.totals.tokens)
       }
     }
+  }
+
+  /// Agent Burn's "Avg tokens / $": priced tokens per known dollar.
+  private var rate: some View {
+    let priced = dashboard.totals.tokens.total - dashboard.totals.unpricedTokens
+    let value = dashboard.totals.cost > 0 && priced > 0 ? Double(priced) / dashboard.totals.cost : nil
+    return MetricTile(
+      title: "Avg tokens / $", value: value.map { Format.tokens(UInt64($0.rounded())) + " / $" } ?? "—",
+      detail: dashboard.period.label, symbol: "gauge.with.dots.needle.50percent", tint: .green
+    )
+    .help("Tokens with a known price divided by their API-equivalent spend.")
+  }
+
+  private var models: some View {
+    MetricTile(
+      title: "Models", value: dashboard.models.filter { $0.model != nil }.count.formatted(),
+      detail: dashboard.harness?.name ?? "Across all harnesses", symbol: "cpu", tint: .purple
+    )
+    .help("Distinct models observed in this period's local history.")
   }
 
   private var days: some View {
@@ -353,7 +380,9 @@ private struct ModelsCard: View {
             .help(model.displayName)
           if model.hasInferredModel {
             Image(systemName: "questionmark.circle").foregroundStyle(.tertiary)
-              .help("Some of this usage was logged without a model name; ccusage inferred it.")
+              .help(
+                "Part of this usage was logged without an exact model name (for example Codex auto-review); ccusage assigned the closest priced model."
+              )
           }
         }
       }
@@ -399,7 +428,9 @@ private struct ModelsCard: View {
           )
         }
         if dashboard.hasInferredModels {
-          Text("Models marked ? include usage whose model ccusage inferred from session context.")
+          Text(
+            "Models marked ? include usage logged without an exact model name, which ccusage assigned to the closest priced model."
+          )
         }
       }
       .font(.caption).foregroundStyle(.secondary)

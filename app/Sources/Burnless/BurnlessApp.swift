@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Inside Burnless.app the Info.plist icon applies. `swift run` has no
     // bundle, so load the icon from the SwiftPM resource bundle instead.
     if Bundle.main.bundleURL.pathExtension != "app",
-      let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+      let url = ResourceBundle.bundle.url(forResource: "AppIcon", withExtension: "icns"),
       let image = NSImage(contentsOf: url)
     {
       NSApp.applicationIconImage = image
@@ -173,31 +173,48 @@ private struct Sidebar: View {
   }
 }
 
+/// Footer adapted from Agent Burn's RefreshFooter: freshness, sources,
+/// version and a refresh button.
 private struct StatusFooter: View {
   @Environment(UsageStore.self) private var store
 
   var body: some View {
-    HStack(spacing: 14) {
+    HStack(spacing: 7) {
+      Circle().fill(store.lastError == nil ? Color.green : BurnTheme.ember).frame(width: 5, height: 5)
       if store.isDemo {
-        Label("Demo data", systemImage: "theatermasks").foregroundStyle(BurnTheme.warning)
+        Text("Demo data").foregroundStyle(BurnTheme.warning)
+      } else if store.isLoading && store.snapshot == nil {
+        Text("Updating usage…")
+      } else if let date = store.snapshot?.refreshedAt {
+        Text(store.lastError == nil ? "Updated" : "Last successful update")
+        Text(date, style: .relative)
+        Text("ago")
       } else {
+        Text("Waiting for usage")
+      }
+      if !store.isDemo {
         ForEach(Harness.allCases) { harness in
-          HStack(spacing: 5) {
-            Text(harness.name)
-            StatusPill(availability: store.snapshot?.availability(harness))
-          }
+          StatusPill(availability: store.snapshot?.availability(harness), label: harness.name)
         }
+        .padding(.leading, 6)
       }
       Spacer()
-      if store.isLoading {
-        ProgressView().controlSize(.small)
-        Text("Reading history…")
-      } else if let date = store.snapshot?.refreshedAt {
-        Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
-          .help(date.formatted(date: .complete, time: .standard))
+      Text(appVersionText).monospacedDigit().accessibilityLabel("App version")
+      Button {
+        store.refresh()
+      } label: {
+        Image(systemName: "arrow.clockwise").symbolEffect(.pulse, isActive: store.isLoading)
       }
+      .buttonStyle(.plain)
+      .disabled(store.isDemo || store.isLoading)
+      .help("Refresh usage (⌘R)")
+      .accessibilityLabel("Refresh usage")
     }
     .font(.system(size: 11)).foregroundStyle(.secondary)
+  }
+
+  private var appVersionText: String {
+    "v" + ((Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev")
   }
 }
 

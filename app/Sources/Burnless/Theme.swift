@@ -7,10 +7,10 @@ import SwiftUI
 enum BurnTheme {
   static let background = Color(nsColor: .windowBackgroundColor)
   static let muted = Color.secondary
-  /// Burnless accent: a cooled ember, distinct from Agent Burn's flame.
+  /// Accent: Agent Burn's flame.
   static let ember = adaptive(
-    light: NSColor(red: 0.80, green: 0.30, blue: 0.16, alpha: 1),
-    dark: NSColor(red: 1.00, green: 0.50, blue: 0.34, alpha: 1))
+    light: NSColor(red: 0.86, green: 0.36, blue: 0.05, alpha: 1),
+    dark: NSColor(red: 1, green: 0.52, blue: 0.2, alpha: 1))
   static let card = adaptive(
     light: NSColor(white: 1, alpha: 0.9), dark: NSColor(white: 1, alpha: 0.055))
   static let cardStroke = adaptive(
@@ -24,17 +24,11 @@ enum BurnTheme {
   static let warning = adaptive(
     light: NSColor(red: 0.62, green: 0.38, blue: 0.0, alpha: 1), dark: .systemYellow)
 
-  /// Stable series colors, identical in every chart, legend and card.
+  /// Stable series colors, as in Agent Burn: Claude orange, Codex green.
   static func color(for harness: Harness) -> Color {
     switch harness {
-    case .claude:
-      adaptive(
-        light: NSColor(red: 0.85, green: 0.47, blue: 0.24, alpha: 1),
-        dark: NSColor(red: 0.95, green: 0.58, blue: 0.36, alpha: 1))
-    case .codex:
-      adaptive(
-        light: NSColor(red: 0.16, green: 0.42, blue: 0.86, alpha: 1),
-        dark: NSColor(red: 0.42, green: 0.62, blue: 1.0, alpha: 1))
+    case .claude: .orange
+    case .codex: .green
     }
   }
 
@@ -93,11 +87,42 @@ struct IconBadge: View {
   }
 }
 
+/// Resources live in SwiftPM's bundle. Inside Burnless.app it is copied to
+/// Contents/Resources and found through the main bundle; `swift run` falls
+/// back to `Bundle.module`.
+enum ResourceBundle {
+  static let bundle: Bundle =
+    Bundle.main.url(forResource: "Burnless_Burnless", withExtension: "bundle")
+    .flatMap { Bundle(url: $0) } ?? Bundle.module
+}
+
+@MainActor enum BrandImages {
+  // Provider logos from Agent Burn (exported from the installed Claude and
+  // ChatGPT macOS apps). They identify the integrations; no endorsement.
+  static let images: [Harness: NSImage] = Dictionary(
+    uniqueKeysWithValues: Harness.allCases.compactMap { harness in
+      guard
+        let url = ResourceBundle.bundle.url(
+          forResource: harness.rawValue, withExtension: "png", subdirectory: "Brands"),
+        let image = NSImage(contentsOf: url)
+      else { return nil }
+      return (harness, image)
+    })
+}
+
 struct HarnessBadge: View {
   let harness: Harness
   var size: CGFloat = 22
   var body: some View {
-    IconBadge(symbol: BurnTheme.symbol(for: harness), tint: BurnTheme.color(for: harness), size: size)
+    Group {
+      if let image = BrandImages.images[harness] {
+        Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
+      } else {
+        IconBadge(symbol: BurnTheme.symbol(for: harness), tint: BurnTheme.color(for: harness), size: size)
+      }
+    }
+    .frame(width: size, height: size)
+    .accessibilityHidden(true)
   }
 }
 
