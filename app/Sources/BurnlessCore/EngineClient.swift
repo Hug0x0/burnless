@@ -27,6 +27,11 @@ public struct EngineConfiguration: Sendable, Equatable {
     ["report", "--timezone", timeZone.identifier] + (onlinePricing ? ["--online-pricing"] : [])
   }
 
+  /// Arguments for `quota`. Live reads use the existing sign-ins read-only.
+  public func quotaArguments(liveClaude: Bool, liveCodex: Bool) -> [String] {
+    ["quota"] + (liveClaude ? ["--live-claude"] : []) + (liveCodex ? ["--live-codex"] : [])
+  }
+
   public func environment(base: [String: String]) -> [String: String] {
     var environment = base
     for (key, value) in [("CLAUDE_CONFIG_DIR", claudeDirectory), ("CODEX_HOME", codexHome)] {
@@ -70,12 +75,42 @@ public enum EngineClient {
   /// Runs the engine off the calling thread and decodes its report.
   public static func run(_ configuration: EngineConfiguration) async throws -> EngineReport {
     try await Task.detached(priority: .utility) {
-      let data = try runProcess(configuration)
+      let data = try runProcess(configuration, arguments: configuration.arguments)
       return try EngineReport.decode(data)
     }.value
   }
 
+  /// Reads plans and limit meters. Fast: it only inspects the newest files.
+  public static func quota(
+    _ configuration: EngineConfiguration, liveClaude: Bool, liveCodex: Bool
+  ) async throws -> QuotaReport {
+    try await Task.detached(priority: .utility) {
+      var configuration = configuration
+      configuration.timeout = min(configuration.timeout, 45)
+      let data = try runProcess(
+        configuration,
+        arguments: configuration.quotaArguments(liveClaude: liveClaude, liveCodex: liveCodex))
+      return try QuotaReport.decode(data)
+    }.value
+  }
+
+  /// Synchronous variant for the background collector, which has no run loop.
+  public static func quotaBlocking(
+    _ configuration: EngineConfiguration, liveClaude: Bool, liveCodex: Bool
+  ) throws -> QuotaReport {
+    var configuration = configuration
+    configuration.timeout = min(configuration.timeout, 45)
+    let data = try runProcess(
+      configuration,
+      arguments: configuration.quotaArguments(liveClaude: liveClaude, liveCodex: liveCodex))
+    return try QuotaReport.decode(data)
+  }
+
   static func runProcess(_ configuration: EngineConfiguration) throws -> Data {
+    try runProcess(configuration, arguments: configuration.arguments)
+  }
+
+  static func runProcess(_ configuration: EngineConfiguration, arguments: [String]) throws -> Data {
     guard FileManager.default.isExecutableFile(atPath: configuration.executable.path) else {
       throw EngineError.missing
     }
@@ -94,7 +129,7 @@ public enum EngineClient {
 
     let process = Process()
     process.executableURL = configuration.executable
-    process.arguments = configuration.arguments
+    process.arguments = arguments
     process.environment = configuration.environment(base: ProcessInfo.processInfo.environment)
     process.currentDirectoryURL = FileManager.default.temporaryDirectory
     process.standardOutput = handle

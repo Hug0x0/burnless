@@ -58,10 +58,12 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
   public var timezone: String?
   /// Set only for generated demonstration data, which is never cached.
   public var isDemo: Bool
+  /// Codex image generations over the last 30 days of the latest read.
+  public var codexImages: [ImageDay]?
 
   public init(
     rows: [UsageRow], sources: [SourceSnapshot], pricing: PricingInfo?, refreshedAt: Date,
-    timezone: String?, isDemo: Bool = false
+    timezone: String?, isDemo: Bool = false, codexImages: [ImageDay]? = nil
   ) {
     self.cacheVersion = Self.cacheVersion
     self.rows = rows
@@ -70,6 +72,7 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
     self.refreshedAt = refreshedAt
     self.timezone = timezone
     self.isDemo = isDemo
+    self.codexImages = codexImages
   }
 
   public func source(_ harness: Harness) -> SourceSnapshot? {
@@ -107,9 +110,11 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
         sources.append(SourceSnapshot(status: status, lastSuccess: nil, isStale: false))
       }
     }
+    let codexFresh = report.sources.first { $0.id == .codex }?.state == .ok
     return UsageSnapshot(
       rows: rows, sources: sources, pricing: report.pricing, refreshedAt: now,
-      timezone: report.timezone)
+      timezone: report.timezone,
+      codexImages: codexFresh ? report.codexImages : previous?.codexImages)
   }
 }
 

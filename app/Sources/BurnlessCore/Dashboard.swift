@@ -1,16 +1,21 @@
 import Foundation
 
+/// Spend periods, in Agent Burn's order.
 public enum Period: String, CaseIterable, Identifiable, Sendable {
-  case today, last7, last30, thisMonth, allTime
+  case today, yesterday, sinceReset, weekToDate, thisMonth, last7, last30, yearToDate, allTime
 
   public var id: String { rawValue }
 
   public var label: String {
     switch self {
     case .today: "Today"
+    case .yesterday: "Yesterday"
+    case .sinceReset: "Reset to date"
+    case .weekToDate: "Week to date"
+    case .thisMonth: "This month"
     case .last7: "Last 7 days"
     case .last30: "Last 30 days"
-    case .thisMonth: "This month"
+    case .yearToDate: "Year to date"
     case .allTime: "All time"
     }
   }
@@ -174,9 +179,11 @@ public struct Dashboard: Equatable, Sendable {
   }
   public var hasInferredModels: Bool { models.contains { $0.hasInferredModel } }
 
+  /// `resetStart` is the start of the current limit window, used by
+  /// `sinceReset`; without one that period falls back to the last 7 days.
   public static func compute(
     snapshot: UsageSnapshot?, harness: Harness?, period: Period, now: Date,
-    days calendar: DayCalendar
+    days calendar: DayCalendar, resetStart: Date? = nil
   ) -> Dashboard {
     let scope = harness.map { [$0] } ?? Harness.allCases
     let rows = (snapshot?.rows ?? []).filter { scope.contains($0.source) }
@@ -184,15 +191,25 @@ public struct Dashboard: Equatable, Sendable {
 
     let recorded = Set(rows.filter { $0.totalTokens > 0 || $0.costUSD > 0 }.map(\.date))
     let lower: String
+    var upper = today
     switch period {
     case .today: lower = today
+    case .yesterday:
+      lower = calendar.adding(days: -1, to: today) ?? today
+      upper = lower
+    case .sinceReset:
+      lower = resetStart.map { min(calendar.key($0), today) } ?? calendar.adding(days: -6, to: today) ?? today
+    case .weekToDate:
+      lower = calendar.calendar.dateInterval(of: .weekOfYear, for: now).map { calendar.key($0.start) } ?? today
+    case .thisMonth: lower = String(today.prefix(7)) + "-01"
     case .last7: lower = calendar.adding(days: -6, to: today) ?? today
     case .last30: lower = calendar.adding(days: -29, to: today) ?? today
-    case .thisMonth: lower = String(today.prefix(7)) + "-01"
-    case .allTime: lower = min(recorded.min() ?? today, today)
+    case .yearToDate: lower = String(today.prefix(4)) + "-01-01"
+    case .allTime:
+      lower = min(recorded.min() ?? today, today)
+      // Rows dated after today (a clock change) stay visible in All time only.
+      upper = max(recorded.max() ?? today, today)
     }
-    // Rows dated after today (a clock change) stay visible in All time only.
-    let upper = period == .allTime ? max(recorded.max() ?? today, today) : today
     let inRange = rows.filter { $0.date >= lower && $0.date <= upper }
 
     // Days after a stale source's last read are unknown, not idle.
