@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
+    WindowCapture.scheduleIfRequested()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -66,7 +67,7 @@ struct MainView: View {
   var body: some View {
     NavigationSplitView {
       Sidebar()
-        .navigationSplitViewColumnWidth(min: 190, ideal: 214, max: 280)
+        .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
     } detail: {
       VStack(spacing: 0) {
         ScrollView {
@@ -191,5 +192,44 @@ private struct StatusFooter: View {
       }
     }
     .font(.system(size: 11)).foregroundStyle(.secondary)
+  }
+}
+
+/// `BURNLESS_CAPTURE=<file.png>` renders the app's own window into a PNG and
+/// quits (optional `BURNLESS_CAPTURE_DELAY` seconds, `BURNLESS_WINDOW_SIZE`
+/// like `1180x900`). Used for README screenshots and visual checks; it needs
+/// no Screen Recording permission because the app draws its own views.
+/// Environment variables are used because AppKit treats path arguments as
+/// documents to open, which suppresses the main window.
+@MainActor enum WindowCapture {
+  static func scheduleIfRequested() {
+    let environment = ProcessInfo.processInfo.environment
+    guard let path = environment["BURNLESS_CAPTURE"], !path.isEmpty else { return }
+    let delay = environment["BURNLESS_CAPTURE_DELAY"].flatMap(Double.init) ?? 6
+    let size = environment["BURNLESS_WINDOW_SIZE"]?.split(separator: "x").compactMap { Double($0) }
+    if let size, size.count == 2 {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        mainWindow?.setContentSize(NSSize(width: size[0], height: size[1]))
+      }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+      defer { NSApp.terminate(nil) }
+      guard let view = mainWindow?.contentView,
+        let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+      else {
+        FileHandle.standardError.write(Data("capture: no window\n".utf8))
+        return
+      }
+      view.cacheDisplay(in: view.bounds, to: rep)
+      do {
+        try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+      } catch {
+        FileHandle.standardError.write(Data("capture: \(error.localizedDescription)\n".utf8))
+      }
+    }
+  }
+
+  private static var mainWindow: NSWindow? {
+    NSApp.windows.first { $0.frame.width > 300 && $0.contentView != nil }
   }
 }

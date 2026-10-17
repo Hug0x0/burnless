@@ -157,14 +157,12 @@ private struct MetricStrip: View {
   private var spend: some View {
     MetricTile(
       title: "Total spend", value: Format.spend(dashboard.totals),
-      detail: dashboard.totals.isPartial
-        ? "API-equivalent value · partial, \(Format.tokens(dashboard.totals.unpricedTokens)) tokens unpriced"
-        : "API-equivalent value",
+      detail: dashboard.totals.isPartial ? "API-equivalent value · partial" : "API-equivalent value",
       symbol: "dollarsign"
     )
     .help(
       dashboard.totals.isPartial
-        ? "Known value only. Some models have no price in the pricing snapshot, so the real API-equivalent value is higher."
+        ? "Known value only. \(Format.fullTokens(dashboard.totals.unpricedTokens)) tokens use models without a price in the pricing snapshot, so the full API-equivalent value is higher."
         : "Estimated cost of these tokens at public API prices.")
   }
 

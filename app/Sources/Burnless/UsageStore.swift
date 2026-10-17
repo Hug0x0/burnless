@@ -96,6 +96,13 @@ enum Appearance: String, CaseIterable, Identifiable {
 
   func start() {
     settings.appearance.apply()
+    // `--appearance light|dark` for screenshots; not saved to preferences.
+    let arguments = ProcessInfo.processInfo.arguments
+    if let index = arguments.firstIndex(of: "--appearance"), arguments.indices.contains(index + 1),
+      let forced = Appearance(rawValue: arguments[index + 1])
+    {
+      forced.apply()
+    }
     if isDemo {
       snapshot = DemoData.snapshot(now: .now, days: calendar)
       lastAttempt = .now

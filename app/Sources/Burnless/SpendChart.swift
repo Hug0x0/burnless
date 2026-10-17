@@ -113,7 +113,10 @@ struct SpendChart: View {
         AxisGridLine()
         AxisValueLabel {
           if let amount = value.as(Double.self) {
-            Text(amount, format: .currency(code: "USD").precision(.fractionLength(0)))
+            Text(
+              amount,
+              format: .currency(code: "USD").locale(Locale(identifier: "en_US")).precision(
+                .fractionLength(0)))
           }
         }
       }
