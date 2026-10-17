@@ -1,0 +1,4 @@
+# ccusage-core embeds a LiteLLM pricing snapshot at build time. Burnless vendors a
+# pinned copy (see pricing/README.md) so builds are reproducible and offline.
+[env]
+CCUSAGE_PRICING_JSON_PATH = { value = "pricing/litellm-model-prices.json", relative = true }

@@ -1,0 +1,4 @@
+[toolchain]
+# Matches the pinned ccusage revision (edition 2024 crates).
+channel = "1.97.1"
+profile = "minimal"
