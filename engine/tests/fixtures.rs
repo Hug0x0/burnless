@@ -44,9 +44,17 @@ impl Fixture {
     }
 
     fn run_with(&self, timezone: &str, env: &[(&str, &Path)]) -> Value {
+        self.engine(&["report", "--timezone", timezone], env)
+    }
+
+    fn quota(&self) -> Value {
+        self.engine(&["quota"], &[])
+    }
+
+    fn engine(&self, args: &[&str], env: &[(&str, &Path)]) -> Value {
         let mut command = Command::new(env!("CARGO_BIN_EXE_burnless-engine"));
         command
-            .args(["report", "--timezone", timezone])
+            .args(args)
             .env_clear()
             .env("HOME", self.dir.path())
             .env("PATH", "/usr/bin:/bin");
@@ -360,4 +368,139 @@ fn rows_carry_no_prompt_content() {
         .output()
         .unwrap();
     assert!(!String::from_utf8_lossy(&output.stdout).contains("SECRET-PROMPT-TEXT"));
+}
+
+fn codex_rate_limits(timestamp: &str, used: f64, plan: &str) -> String {
+    json!({
+        "timestamp": timestamp,
+        "type": "event_msg",
+        "payload": {
+            "type": "token_count",
+            "info": null,
+            "rate_limits": {
+                "limit_id": "codex",
+                "primary": {"used_percent": used, "window_minutes": 10080, "resets_at": 1_792_683_187},
+                "secondary": null,
+                "plan_type": plan
+            }
+        }
+    })
+    .to_string()
+}
+
+#[test]
+fn quota_reads_local_plans_and_meters_without_credentials() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.path(".claude.json"),
+        json!({
+            "oauthAccount": {"accountUuid": "acct", "organizationRateLimitTier": "default_claude_max_5x"},
+            "cachedUsageUtilization": {
+                "accountUuid": "acct",
+                "fetchedAtMs": 1_792_245_336_888_i64,
+                "utilization": {
+                    "five_hour": {"utilization": 3, "resets_at": "2026-10-17T17:29:59.714946+00:00"},
+                    "seven_day": {"utilization": 10, "resets_at": "2026-10-19T21:59:59.714969+00:00"}
+                }
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fixture.write(
+        ".codex/sessions/2026/10/16/rollout-2026-10-16T09-00-00-a.jsonl",
+        &[codex_rate_limits("2026-10-16T09:00:00.000Z", 30.0, "plus")],
+    );
+    // The newest session wins, including over a side limit logged after it.
+    fixture.write(
+        ".codex/sessions/2026/10/17/rollout-2026-10-17T09-00-00-b.jsonl",
+        &[
+            codex_rate_limits("2026-10-17T09:00:00.000Z", 42.5, "plus"),
+            json!({"payload": {"rate_limits": {"limit_id": "codex_bengalfox",
+                "primary": {"used_percent": 100.0, "window_minutes": 10080, "resets_at": 1}}}})
+            .to_string(),
+        ],
+    );
+
+    let quota = fixture.quota();
+    assert_eq!(quota["schemaVersion"], 1);
+    assert_eq!(quota["claude"]["planTier"], "default_claude_max_5x");
+    assert_eq!(quota["claude"]["account"]["source"], "claudeCode");
+    assert_eq!(quota["claude"]["account"]["session"]["usedPercent"], 3.0);
+    assert_eq!(quota["claude"]["account"]["weekly"]["windowMinutes"], 10080);
+    assert!(quota["claude"]["account"]["weekly"]["resetsAtMs"].is_i64());
+    assert_eq!(quota["claude"]["live"]["state"], "off");
+    assert_eq!(quota["codex"]["planType"], "plus");
+    assert_eq!(quota["codex"]["snapshot"]["source"], "logs");
+    assert_eq!(quota["codex"]["snapshot"]["weekly"]["usedPercent"], 42.5);
+    assert_eq!(quota["codex"]["snapshot"]["weekly"]["resetsAtMs"], 1_792_683_187_000_i64);
+    assert_eq!(quota["codex"]["live"]["state"], "off");
+}
+
+#[test]
+fn quota_without_any_source_is_empty_not_an_error() {
+    let fixture = Fixture::new();
+    let quota = fixture.quota();
+    assert!(quota["claude"]["account"].is_null());
+    assert!(quota["claude"]["planTier"].is_null());
+    assert!(quota["codex"]["snapshot"].is_null());
+    assert_eq!(quota["codex"]["limitUsageDaily"], json!([]));
+}
+
+#[test]
+fn quota_never_modifies_account_or_session_files() {
+    let fixture = Fixture::new();
+    let account = json!({"oauthAccount": {"userRateLimitTier": "default_claude_pro"}}).to_string();
+    fs::write(fixture.path(".claude.json"), &account).unwrap();
+    let session = ".codex/sessions/2026/10/17/rollout-2026-10-17T09-00-00-b.jsonl";
+    fixture.write(session, &[codex_rate_limits("2026-10-17T09:00:00.000Z", 1.0, "pro")]);
+    let before = fs::read(fixture.path(session)).unwrap();
+    let quota = fixture.quota();
+    assert_eq!(quota["claude"]["planTier"], "default_claude_pro");
+    assert_eq!(fs::read_to_string(fixture.path(".claude.json")).unwrap(), account);
+    assert_eq!(fs::read(fixture.path(session)).unwrap(), before);
+}
+
+#[test]
+fn codex_image_generations_are_counted_once_per_image() {
+    let fixture = Fixture::new();
+    let today = Command::new("date").arg("-u").arg("+%Y-%m-%d").output().unwrap();
+    let today = String::from_utf8(today.stdout).unwrap().trim().to_string();
+    let image = |id: &str| {
+        json!({"timestamp": format!("{today}T10:00:00.000Z"), "type": "response_item",
+            "payload": {"type": "image_generation_call", "id": id, "result": "AAAA"}})
+        .to_string()
+    };
+    fixture.write(
+        &format!(".codex/sessions/x/rollout-{today}T10-00-00-img.jsonl"),
+        &[
+            codex_total(&format!("{today}T10:00:00.000Z"), "gpt-5", 100, 0, 10),
+            image("ig_one"),
+            image("ig_one"),
+            image("ig_two"),
+        ],
+    );
+    let report = fixture.run("UTC");
+    assert_eq!(report["codexImages"], json!([{"date": today, "count": 2}]));
+}
+
+#[test]
+fn row_cost_breakdown_adds_up_to_the_row_cost() {
+    let fixture = Fixture::new();
+    fixture.write(
+        ".claude/projects/p/s.jsonl",
+        &[claude_line("m1", "r1", "2026-03-01T10:00:00.000Z", "claude-sonnet-4-5", 1000, 500)],
+    );
+    let report = fixture.run("UTC");
+    let rows = rows(&report, "claude");
+    let row = rows[0];
+    let cost = row["costUSD"].as_f64().unwrap();
+    assert!(cost > 0.0);
+    let parts: f64 = ["input", "output", "cacheWrite", "cacheRead"]
+        .iter()
+        .map(|key| row["costBreakdown"][key].as_f64().unwrap())
+        .sum();
+    assert!((parts - cost).abs() < 1e-9);
+    // Output tokens cost more per token than input tokens.
+    assert!(row["costBreakdown"]["output"].as_f64().unwrap() > row["costBreakdown"]["input"].as_f64().unwrap());
 }
