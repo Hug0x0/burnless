@@ -45,8 +45,10 @@ struct BurnlessApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
-    // Running from `swift run` has no bundle icon; use the packaged one.
-    if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+    // Inside Burnless.app the Info.plist icon applies. `swift run` has no
+    // bundle, so load the icon from the SwiftPM resource bundle instead.
+    if Bundle.main.bundleURL.pathExtension != "app",
+      let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
       let image = NSImage(contentsOf: url)
     {
       NSApp.applicationIconImage = image
