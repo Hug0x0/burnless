@@ -12,10 +12,16 @@ struct BurnlessApp: App {
     let demo =
       arguments.contains("--demo") || ProcessInfo.processInfo.environment["BURNLESS_DEMO"] == "1"
     let store = UsageStore(isDemo: demo)
-    if let route = arguments.firstIndex(of: "--route").flatMap({ arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }) {
-      store.route = route == "claude" ? .harness(.claude) : route == "codex" ? .harness(.codex) : route == "settings" ? .settings : .overview
+    // Launch options for screenshots and checks. Environment variables, not
+    // arguments: AppKit treats bare arguments as documents to open.
+    let environment = ProcessInfo.processInfo.environment
+    switch environment["BURNLESS_ROUTE"] {
+    case "claude": store.route = .harness(.claude)
+    case "codex": store.route = .harness(.codex)
+    case "settings": store.route = .settings
+    default: break
     }
-    if let period = arguments.firstIndex(of: "--period").flatMap({ arguments.indices.contains($0 + 1) ? Period(rawValue: arguments[$0 + 1]) : nil }) {
+    if let period = environment["BURNLESS_PERIOD"].flatMap(Period.init(rawValue:)) {
       store.period = period
     }
     _store = State(initialValue: store)
@@ -67,7 +73,7 @@ struct MainView: View {
   var body: some View {
     NavigationSplitView {
       Sidebar()
-        .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
+        .navigationSplitViewColumnWidth(min: 236, ideal: 244, max: 320)
     } detail: {
       VStack(spacing: 0) {
         ScrollView {
@@ -202,6 +208,8 @@ private struct StatusFooter: View {
 /// Environment variables are used because AppKit treats path arguments as
 /// documents to open, which suppresses the main window.
 @MainActor enum WindowCapture {
+  static var isActive: Bool { ProcessInfo.processInfo.environment["BURNLESS_CAPTURE"] != nil }
+
   static func scheduleIfRequested() {
     let environment = ProcessInfo.processInfo.environment
     guard let path = environment["BURNLESS_CAPTURE"], !path.isEmpty else { return }

@@ -97,7 +97,7 @@ struct SpendChart: View {
           .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
           .annotation(
             position: .top, spacing: 4,
-            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+            overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
           ) { tooltip(bucket) }
       }
     }
@@ -106,17 +106,19 @@ struct SpendChart: View {
       range: Harness.allCases.map { BurnTheme.color(for: $0) }
     )
     .chartLegend(.hidden)
-    .chartXSelection(value: $selected)
+    // Screenshots ignore wherever the real pointer happens to be.
+    .chartXSelection(value: WindowCapture.isActive ? .constant(nil) : $selected)
     .chartXScale(domain: domain)
     .chartYAxis {
       AxisMarks(position: .leading) { value in
         AxisGridLine()
         AxisValueLabel {
           if let amount = value.as(Double.self) {
+            // A plain string: Text(_:format:) would swap in the system locale.
             Text(
-              amount,
-              format: .currency(code: "USD").locale(Locale(identifier: "en_US")).precision(
-                .fractionLength(0)))
+              amount.formatted(
+                .currency(code: "USD").locale(Locale(identifier: "en_US")).precision(
+                  .fractionLength(0))))
           }
         }
       }
