@@ -2,12 +2,16 @@
 //! prints one versioned JSON report on stdout.
 //!
 //! Usage: burnless-engine report [--timezone <IANA>] [--online-pricing]
+//!        burnless-engine quota [--live-claude] [--live-codex]
 //!        burnless-engine version
 //!
-//! The engine never writes to the history folders and never prints prompt or
-//! conversation content: rows only carry dates, model names and token counts.
+//! The engine never writes anything and never prints prompt or conversation
+//! content: rows only carry dates, model names, token counts and costs, and
+//! quotas only carry plan names, percentages and reset times.
 
+mod images;
 mod pricing_fetch;
+mod quota;
 mod report;
 mod sources;
 
@@ -18,7 +22,7 @@ use std::{
 };
 
 use ccusage_core::{
-    PricingMap,
+    PricingMap, format_date, utc_now,
     cli::{AgentReportKind, CodexSpeed, CostMode, SharedArgs},
 };
 use serde::Serialize;
@@ -40,6 +44,8 @@ struct Report {
     pricing: PricingInfo,
     sources: Vec<SourceStatus>,
     rows: Vec<Row>,
+    /// Codex image generations per session day over the last 30 days.
+    codex_images: Vec<images::ImageDay>,
 }
 
 #[derive(Serialize)]
@@ -58,6 +64,7 @@ struct PricingInfo {
 struct Options {
     timezone: Option<String>,
     online_pricing: bool,
+    quota: quota::QuotaOptions,
 }
 
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Options), String> {
@@ -65,6 +72,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Options
     let mut options = Options {
         timezone: None,
         online_pricing: false,
+        quota: quota::QuotaOptions::default(),
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -72,6 +80,12 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Options
                 options.timezone = Some(args.next().ok_or("--timezone needs a value")?);
             }
             "--online-pricing" => options.online_pricing = true,
+            "--live-claude" => options.quota.live_claude = true,
+            "--live-codex" => options.quota.live_codex = true,
+            "--live" => {
+                options.quota.live_claude = true;
+                options.quota.live_codex = true;
+            }
             other => return Err(format!("unknown argument: {other}")),
         }
     }
@@ -130,18 +144,27 @@ fn run_report(options: &Options) -> Report {
     let mut claude = status(SourceId::Claude, &sources::claude(), "CLAUDE_CONFIG_DIR");
     let mut codex = status(SourceId::Codex, &sources::codex(), "CODEX_HOME");
 
+    let pricing = PricingMap::load_with_overrides(shared.offline, false, std::iter::empty());
     let mut rows = guarded(&mut claude, || {
         let daily = ccusage_adapter_claude::load_daily_summaries_with_detection(&shared, None, false)
             .map_err(|error| error.to_string())?;
-        Ok(report::claude_rows(&daily.summaries))
+        Ok(report::claude_rows(&daily.summaries, Some(&pricing)))
     });
     rows.extend(guarded(&mut codex, || {
-        let pricing = PricingMap::load_with_overrides(shared.offline, false, std::iter::empty());
         let speed = ccusage_adapter_codex::resolve_codex_speed(CodexSpeed::Auto);
         let groups = ccusage_adapter_codex::load_groups(&shared, AgentReportKind::Daily)
             .map_err(|error| error.to_string())?;
         Ok(report::codex_rows(&groups, &pricing, speed))
     }));
+    let codex_images = if codex.state == SourceState::Ok {
+        let since = utc_now()
+            .checked_sub_millis(30 * 86_400_000)
+            .unwrap_or_else(utc_now);
+        let since = format_date(since, options.timezone.as_deref());
+        catch_unwind(|| images::codex_image_days(&since)).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     rows.sort_by(|a, b| {
         (a.date.as_str(), a.source as u8, a.model.as_deref())
             .cmp(&(b.date.as_str(), b.source as u8, b.model.as_deref()))
@@ -165,6 +188,7 @@ fn run_report(options: &Options) -> Report {
         },
         sources: vec![claude, codex],
         rows,
+        codex_images,
     }
 }
 
@@ -178,19 +202,8 @@ fn main() -> ExitCode {
     };
     pricing_fetch::install();
     match command.as_str() {
-        "report" => {
-            let report = run_report(&options);
-            match serde_json::to_string(&report) {
-                Ok(json) => {
-                    println!("{json}");
-                    ExitCode::SUCCESS
-                }
-                Err(error) => {
-                    eprintln!("burnless-engine: {error}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
+        "report" => print_json(&run_report(&options)),
+        "quota" => print_json(&quota::run(options.quota)),
         "version" => {
             println!(
                 "burnless-engine {} (schema {SCHEMA_VERSION}, ccusage {CCUSAGE_REV}, litellm {LITELLM_REV})",
@@ -201,6 +214,19 @@ fn main() -> ExitCode {
         other => {
             eprintln!("burnless-engine: unknown command {other}");
             ExitCode::from(2)
+        }
+    }
+}
+
+fn print_json(value: &impl Serialize) -> ExitCode {
+    match serde_json::to_string(value) {
+        Ok(json) => {
+            println!("{json}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("burnless-engine: {error}");
+            ExitCode::FAILURE
         }
     }
 }

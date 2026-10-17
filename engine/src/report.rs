@@ -17,7 +17,7 @@ use ccusage_adapter_codex::{
     CodexGroup, CodexSpeedPolicy, calculate_codex_model_cost, codex_model_missing_pricing,
     non_cached_input_tokens,
 };
-use ccusage_core::{PricingMap, UsageSummary};
+use ccusage_core::{Pricing, PricingMap, UsageSummary};
 use serde::Serialize;
 
 use crate::sources::SourceId;
@@ -47,6 +47,83 @@ pub struct Row {
     pub missing_pricing: bool,
     /// The model name was inferred by ccusage rather than logged (Codex).
     pub inferred_model: bool,
+    /// `costUSD` split by token class. The parts always add up to `costUSD`.
+    pub cost_breakdown: CostBreakdown,
+}
+
+/// API-equivalent cost per token class, in USD.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CostBreakdown {
+    pub input: f64,
+    pub output: f64,
+    pub cache_write: f64,
+    pub cache_read: f64,
+}
+
+impl CostBreakdown {
+    /// Splits a known cost across token classes in proportion to each class's
+    /// per-token price. Claude Code may log its own cost, so the split is
+    /// scaled to that total rather than recomputed. Without a price, tokens
+    /// are the weights.
+    pub fn split(cost: f64, tokens: [u64; 4], rates: Option<[f64; 4]>) -> Self {
+        if !(cost.is_finite() && cost > 0.0) {
+            return Self::default();
+        }
+        let by_rate = rates.map(|rates| {
+            let mut weights = [0.0; 4];
+            for index in 0..4 {
+                weights[index] = tokens[index] as f64 * rates[index];
+            }
+            weights
+        });
+        let weights = by_rate
+            .filter(|weights| {
+                let sum: f64 = weights.iter().sum();
+                sum.is_finite() && sum > 0.0
+            })
+            .unwrap_or_else(|| tokens.map(|count| count as f64));
+        let sum: f64 = weights.iter().sum();
+        if sum <= 0.0 {
+            return Self {
+                input: cost,
+                ..Self::default()
+            };
+        }
+        let part = |index: usize| cost * weights[index] / sum;
+        Self {
+            input: part(0),
+            output: part(1),
+            cache_write: part(2),
+            cache_read: part(3),
+        }
+    }
+}
+
+/// Per-token rates as `[input, output, cache write, cache read]`.
+fn claude_rates(pricing: &Pricing) -> [f64; 4] {
+    [
+        pricing.input,
+        pricing.output,
+        pricing.cache_creation_input_token_cost(),
+        pricing.cache_read,
+    ]
+}
+
+/// Codex bills cached input at the input rate unless a cache rate is published,
+/// matching `calculate_codex_model_cost`.
+fn codex_rates(pricing: &Pricing) -> [f64; 4] {
+    let cache_read = if pricing.cache_read_explicit {
+        pricing.cache_read
+    } else {
+        pricing.input
+    };
+    [
+        pricing.input,
+        pricing.output,
+        pricing.cache_creation_input_token_cost(),
+        cache_read,
+    ]
 }
 
 impl Row {
@@ -64,7 +141,17 @@ impl Row {
             cost_usd: 0.0,
             missing_pricing: false,
             inferred_model: false,
+            cost_breakdown: CostBreakdown::default(),
         }
+    }
+
+    fn tokens(&self) -> [u64; 4] {
+        [
+            self.input_tokens,
+            self.output_tokens,
+            self.cache_write_tokens,
+            self.cache_read_tokens,
+        ]
     }
 
     fn finish(mut self) -> Self {
@@ -88,7 +175,7 @@ impl Row {
 /// Claude daily summaries carry per-model breakdowns. Entries logged without
 /// a model contribute to the day but to no breakdown; that remainder becomes
 /// an unattributed row so the day total is never lost.
-pub fn claude_rows(summaries: &[UsageSummary]) -> Vec<Row> {
+pub fn claude_rows(summaries: &[UsageSummary], pricing: Option<&PricingMap>) -> Vec<Row> {
     let mut rows = Vec::new();
     for summary in summaries {
         let Some(date) = summary.date.as_deref() else {
@@ -103,7 +190,11 @@ pub fn claude_rows(summaries: &[UsageSummary]) -> Vec<Row> {
             row.cache_read_tokens = breakdown.cache_read_tokens;
             row.cost_usd = breakdown.cost;
             row.missing_pricing = breakdown.missing_pricing;
-            let row = row.finish();
+            let mut row = row.finish();
+            let rates = pricing
+                .and_then(|pricing| pricing.find(&breakdown.model_name))
+                .map(|pricing| claude_rates(&pricing));
+            row.cost_breakdown = CostBreakdown::split(row.cost_usd, row.tokens(), rates);
             attributed.input_tokens += row.input_tokens;
             attributed.output_tokens += row.output_tokens;
             attributed.cache_write_tokens += row.cache_write_tokens;
@@ -128,6 +219,7 @@ pub fn claude_rows(summaries: &[UsageSummary]) -> Vec<Row> {
         let mut rest = rest.finish();
         // Tokens without a model and without a logged cost cannot be valued.
         rest.missing_pricing = rest.total_tokens > 0 && rest.cost_usd == 0.0;
+        rest.cost_breakdown = CostBreakdown::split(rest.cost_usd, rest.tokens(), None);
         if !rest.is_empty() {
             rows.push(rest);
         }
@@ -158,7 +250,9 @@ pub fn codex_rows(
             row.cost_usd = calculate_codex_model_cost(model, usage, pricing, speed);
             row.missing_pricing = codex_model_missing_pricing(model, usage, pricing);
             row.inferred_model = usage.is_fallback;
-            let row = row.finish();
+            let mut row = row.finish();
+            let rates = pricing.find(model).map(|pricing| codex_rates(&pricing));
+            row.cost_breakdown = CostBreakdown::split(row.cost_usd, row.tokens(), rates);
             if !row.is_empty() {
                 rows.push(row);
             }
@@ -211,7 +305,7 @@ mod tests {
     fn claude_remainder_without_model_is_unattributed_and_unpriced() {
         let mut day = summary("2026-03-01", 150, 30, 1.0);
         day.model_breakdowns = vec![breakdown("claude-sonnet-4-5", 100, 20, 1.0, false)];
-        let rows = claude_rows(&[day]);
+        let rows = claude_rows(&[day], None);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].model.as_deref(), Some("claude-sonnet-4-5"));
         assert_eq!(rows[1].model, None);
@@ -225,7 +319,7 @@ mod tests {
     fn claude_fully_attributed_day_has_no_remainder() {
         let mut day = summary("2026-03-01", 100, 20, 1.0 + 1e-12);
         day.model_breakdowns = vec![breakdown("claude-opus-4-1", 100, 20, 1.0, false)];
-        let rows = claude_rows(&[day]);
+        let rows = claude_rows(&[day], None);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].total_tokens, 120);
     }
@@ -234,17 +328,37 @@ mod tests {
     fn unknown_price_is_flagged_not_silently_zero() {
         let mut day = summary("2026-03-01", 10, 5, 0.0);
         day.model_breakdowns = vec![breakdown("mystery-model", 10, 5, 0.0, true)];
-        let rows = claude_rows(&[day]);
+        let rows = claude_rows(&[day], None);
         assert_eq!(rows.len(), 1);
         assert!(rows[0].missing_pricing);
         assert_eq!(rows[0].cost_usd, 0.0);
     }
 
     #[test]
+    fn cost_breakdown_follows_rates_and_adds_up() {
+        let split = CostBreakdown::split(10.0, [100, 10, 0, 1000], Some([1.0, 5.0, 1.25, 0.1]));
+        let total = split.input + split.output + split.cache_write + split.cache_read;
+        assert!((total - 10.0).abs() < 1e-9);
+        // Weights 100, 50, 0, 100 out of 250.
+        assert!((split.input - 4.0).abs() < 1e-9);
+        assert!((split.output - 2.0).abs() < 1e-9);
+        assert_eq!(split.cache_write, 0.0);
+        assert!((split.cache_read - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cost_breakdown_without_price_uses_token_weights() {
+        let split = CostBreakdown::split(3.0, [1, 2, 0, 0], None);
+        assert!((split.input - 1.0).abs() < 1e-9);
+        assert!((split.output - 2.0).abs() < 1e-9);
+        assert_eq!(CostBreakdown::split(0.0, [1, 2, 3, 4], None), CostBreakdown::default());
+    }
+
+    #[test]
     fn non_finite_cost_becomes_missing_pricing() {
         let mut day = summary("2026-03-01", 10, 5, f64::NAN);
         day.model_breakdowns = vec![breakdown("m", 10, 5, f64::NAN, false)];
-        let rows = claude_rows(&[day]);
+        let rows = claude_rows(&[day], None);
         assert!(rows.iter().all(|row| row.cost_usd.is_finite()));
         assert!(rows[0].missing_pricing);
     }
