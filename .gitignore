@@ -1,0 +1,9 @@
+.DS_Store
+/engine/target/
+/app/.build/
+/app/.swiftpm/
+/dist/
+/dist-staging.*
+*.xcuserstate
+# Never commit real usage data or local caches
+/local-captures/
