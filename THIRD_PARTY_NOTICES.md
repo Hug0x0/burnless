@@ -37,10 +37,17 @@ SOFTWARE.
 ## Agent Burn
 
 Burnless's dashboard layout, card/metric/share-bar components (`Theme.swift`),
-spend histogram (`SpendChart.swift`) and model table follow and adapt code from
+spend histogram (`SpendChart.swift`), model table, quota chart and its geometry
+(`QuotaChartView.swift`, `QuotaChartMath.swift`), quota history rules and forecast
+(`Quota.swift`), Claude account and Codex limit views (`QuotaViews.swift`), subscription
+details (`SubscriptionViews.swift`), menu bar popover (`MenuBar.swift`) and settings
+tabs (`SettingsView.swift`) follow and adapt code from
 https://github.com/Melvynx/agent-burn at revision
 `9ce6d8e1f9ae4bfb3ca62a2d3fee6cd831171105`, mainly
-`apps/macos/Sources/AgentBurn/{NativeUsageView,Theme,Usage}.swift`.
+`apps/macos/Sources/AgentBurn/*.swift`. The engine's quota parsing (`engine/src/quota.rs`,
+`engine/src/images.rs`) follows Agent Burn's Rust `claude/limits.rs`,
+`claude/claude_code.rs`, `claude/plan.rs`, `codex/limits.rs`, `codex/plan.rs`,
+`codex/limit_usage.rs` and `codex/images.rs`, without its OAuth token renewal.
 
 ```
 MIT License

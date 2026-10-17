@@ -1,23 +1,46 @@
 # Burnless
 
-A small native macOS dashboard for **Claude Code** and **Codex** usage: API-equivalent
-spend, tokens, days recorded, daily spend and models, read only from the local
-history files on your Mac.
+A native macOS app for **Claude Code** and **Codex**: API-equivalent spend, tokens,
+models, subscription limits with pace and forecast, plan value, and a menu bar
+quota. Everything is read from files on your Mac by default.
 
-Burnless is a deliberately reduced take on [Agent Burn](https://github.com/Melvynx/agent-burn):
-the same dashboard style and information for two harnesses, with no quotas, no
-subscriptions, no menu bar, no background agent and no network service. Its data
-engine is [ccusage](https://github.com/ccusage/ccusage).
+Burnless is [Agent Burn](https://github.com/Melvynx/agent-burn) focused on two
+harnesses: the same dashboard, quota charts, menu bar and settings, for Claude Code
+and Codex only. Its data engine is [ccusage](https://github.com/ccusage/ccusage).
 
 ![Overview (demo data)](docs/screenshots/overview.png)
 
-| Claude Code | Codex | Dark |
+| Claude Code | Codex | Menu bar |
 | --- | --- | --- |
-| ![](docs/screenshots/claude.png) | ![](docs/screenshots/codex.png) | ![](docs/screenshots/overview-dark.png) |
+| ![](docs/screenshots/claude.png) | ![](docs/screenshots/codex.png) | ![](docs/screenshots/menu-bar.png) |
+
+| Dark | Settings · Quotas |
+| --- | --- |
+| ![](docs/screenshots/claude-dark.png) | ![](docs/screenshots/settings-quotas.png) |
 
 Screenshots use the built-in demo mode; none of these numbers are real usage.
 
 ## What it shows
+
+**Subscription limits** (top of each harness page):
+
+- **Claude**: 5-hour session and weekly limits side by side, each with remaining share,
+  pace badge (`+10 pts ahead` / `−8 pts behind`), reset countdown and an until-reset chart
+  with even pace, forecast and the locked-out span when you would run out early. A
+  one-line verdict ("On track." / "Session runs out ≈ 22:04."), model-scoped weekly
+  limits and extra usage credits.
+- **Codex**: weekly quota with remaining, pace, reset time, used share, suggested daily
+  pace, $ per percent, banked resets and the shorter window when Codex reports one. The
+  chart range is selectable (Until reset, Reset to today, Today, Last 7 / 30 days). With
+  live limits, the weekly limit used per day by surface or by model.
+- **Plans**: detected from `~/.claude.json` (Claude rate-limit tier) and Codex's logs
+  (plan type), with monthly prices for known plans (Pro, Max 5×, Max 20×, Plus, Pro).
+  Unknown prices stay unknown; set one in Settings → Quotas.
+- **Subscription economics**: last 30 days at API prices vs. the plan price (value
+  multiple, subsidy, discount), daily usage in the current window, spend by token type,
+  8-week trend, quota value estimate and Codex image generations.
+
+**Usage**:
 
 - **Total spend**: API-equivalent value of the tokens in the selected period.
 - **Tokens**: input, output, cache write and cache read (breakdown in the ⓘ popover
@@ -32,8 +55,14 @@ Screenshots use the built-in demo mode; none of these numbers are real usage.
 - **Models · Available source data**: models seen in your logs, with tokens,
   spend and share. You can search and sort them.
 
-Periods: Today, Last 7 days, Last 30 days (default), This month, All time.
-Navigation: All harnesses, Claude Code, Codex, Settings. Refresh with ⌘R.
+Periods: Today, Yesterday, Reset to date, Week to date, This month, Last 7 days,
+Last 30 days (default), Year to date, All time. Navigation: Overview (with a
+Subscriptions card), Claude Code, Codex. Refresh with ⌘R; check limits now with ⇧⌘R.
+
+**Menu bar**: a flame with the weekly remaining of the harness you choose, and a popover
+with General / Codex / Claude tabs (spend, tokens, quota remaining, busiest agents, top
+models, weekly chart and usage details). Optional menu-bar-only mode, launch at login,
+background collection and update checks are in Settings.
 
 ## Install
 
@@ -95,8 +124,41 @@ Privacy and safety:
 - The engine outputs only dates, model names, token counts and costs. Prompts and
   conversations are never stored or displayed.
 - There's no account, no API key and no telemetry. Nothing is sent anywhere unless you
-  enable *Fetch current prices*, which only downloads LiteLLM's public price list.
+  enable *Fetch current prices* (downloads LiteLLM's public price list), *Read live
+  limits* (see below) or *Check for updates* (reads the public GitHub release list).
 - Cloud conversations that are not in the local history are not counted.
+
+## Limits and live readings
+
+By default Burnless reads limits from files already on your Mac, with no sign-in and no
+network request:
+
+- Codex writes the account `rate_limits` it enforced with each request to its session
+  logs; Burnless reads the newest one (side limits such as Spark are skipped).
+- Claude Code saves the meters it last fetched in `~/.claude.json`
+  (`cachedUsageUtilization`), next to the account's rate-limit tier. Burnless ignores
+  meters that belong to a different signed-in account.
+
+These are as fresh as the last time Claude Code or Codex wrote them; each card says how
+old its reading is. Settings → Quotas → **Read live limits** (off by default) also asks
+the providers once a minute, using the endpoints Codex and Claude Code call themselves:
+`chatgpt.com/backend-api/wham/usage` with the token in `~/.codex/auth.json`, and
+`api.anthropic.com/api/oauth/usage` with Claude Code's Keychain item
+(`Claude Code-credentials`; macOS asks for permission once). Sign-ins are used strictly
+read-only: Burnless never renews, writes or stores a token. An expired Claude sign-in is
+reported and Claude Code renews it on its next run. Rate limits (HTTP 429) are honoured,
+and the app and background collector share one pacing so Anthropic is asked at most
+once a minute.
+
+Readings (percentages and reset times only) are kept for 120 days in
+`~/Library/Application Support/Burnless/quota-history.json` for the charts. As in Agent
+Burn, a weekly reading far above the last half hour's lowest one is treated as a provider
+over-count until confirmed, and replays of an earlier window are ignored. Forecasts
+extend the observed pace to reset; even pace spreads the limit evenly over the window.
+
+**Background collection** (Settings → Background, off by default) registers a launch
+agent (`Contents/Library/LaunchAgents/io.github.hug0x0.burnless.quota.plist`) that runs
+`Burnless --collect-quotas` every minute, so charts have no gaps when the app is closed.
 
 ## How numbers are calculated
 
@@ -155,13 +217,17 @@ between the two runs.
 
 ## Limits
 
-- Only Claude Code and Codex. There are no quotas, limits, reset times, subscriptions,
-  forecasts, menu bar or notifications (by design).
+- Only Claude Code and Codex (no Cursor or other harnesses, by design).
+- Without live limits, Claude's meters are only as recent as Claude Code's own last check.
+  Codex's daily breakdown by surface and model needs live limits.
+- Plan prices are a built-in table; Codex Pro Lite and team plans have no price until
+  you set one. Image generations use a $0.15 per image estimate, outside spend totals.
 - Estimates depend on the pricing snapshot. New models may show as unpriced until the
   snapshot is updated or *Fetch current prices* is enabled.
 - History deleted from disk can't be reconstructed. The cache only keeps data for a
   source while that source is failing.
-- The build is ad-hoc signed for local use. It is not notarized for distribution.
+- The build is ad-hoc signed for local use. It is not notarized for distribution, and
+  Check for Updates only links to new GitHub releases (no automatic install).
 
 ## Troubleshooting
 
@@ -186,5 +252,6 @@ variables (`BURNLESS_CAPTURE`, `BURNLESS_ROUTE`, `BURNLESS_PERIOD`,
 ## License and credits
 
 MIT, see [LICENSE](LICENSE). Built on ccusage (MIT, © ryoppippi) and adapted from
-Agent Burn (MIT, © ryoppippi, © Melvynx). Pricing data comes from LiteLLM (MIT).
+Agent Burn (MIT, © ryoppippi, © Melvynx): dashboard, quota chart, Claude account panels,
+Codex limit chart, menu bar popover and settings. Pricing data comes from LiteLLM (MIT).
 Provider logos belong to their owners. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
