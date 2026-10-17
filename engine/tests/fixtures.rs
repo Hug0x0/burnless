@@ -127,6 +127,8 @@ fn report_has_versioned_schema_and_pricing_provenance() {
     let report = fixture.run("UTC");
     assert_eq!(report["schemaVersion"], 1);
     assert_eq!(report["pricing"]["online"], false);
+    // Offline runs must never touch the network.
+    assert_eq!(report["pricing"]["onlineFetched"], false);
     assert!(report["pricing"]["litellmRevision"].as_str().unwrap().len() == 40);
 }
 

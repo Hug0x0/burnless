@@ -67,6 +67,12 @@ struct SettingsView: View {
             Text("LiteLLM \(pricing.litellmRevision.prefix(7)) · \(pricing.snapshotDate)")
               .textSelection(.enabled)
           }
+          if pricing.online {
+            LabeledContent("Current prices") {
+              Text(pricing.onlineFetched == true ? "Downloaded on last refresh" : "Download failed · using bundled snapshot")
+                .foregroundStyle(pricing.onlineFetched == true ? Color.secondary : BurnTheme.warning)
+            }
+          }
           LabeledContent("Engine") {
             Text("ccusage \(pricing.ccusageRevision.prefix(7))").textSelection(.enabled)
           }

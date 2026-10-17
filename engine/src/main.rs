@@ -7,6 +7,7 @@
 //! The engine never writes to the history folders and never prints prompt or
 //! conversation content: rows only carry dates, model names and token counts.
 
+mod pricing_fetch;
 mod report;
 mod sources;
 
@@ -48,8 +49,10 @@ struct PricingInfo {
     ccusage_revision: &'static str,
     litellm_revision: &'static str,
     snapshot_date: &'static str,
-    /// True when this run also fetched current LiteLLM prices.
+    /// True when this run was asked to fetch current prices.
     online: bool,
+    /// True when current LiteLLM prices were actually downloaded and used.
+    online_fetched: bool,
 }
 
 struct Options {
@@ -158,6 +161,7 @@ fn run_report(options: &Options) -> Report {
             litellm_revision: LITELLM_REV,
             snapshot_date: LITELLM_SNAPSHOT_DATE,
             online: options.online_pricing,
+            online_fetched: pricing_fetch::litellm_fetched(),
         },
         sources: vec![claude, codex],
         rows,
@@ -172,6 +176,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    pricing_fetch::install();
     match command.as_str() {
         "report" => {
             let report = run_report(&options);

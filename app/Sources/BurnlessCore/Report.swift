@@ -51,16 +51,19 @@ public struct PricingInfo: Codable, Equatable, Sendable {
   public var litellmRevision: String
   public var snapshotDate: String
   public var online: Bool
+  /// Whether current prices were actually downloaded (`nil` from older engines).
+  public var onlineFetched: Bool?
 
   public init(
     provider: String, ccusageRevision: String, litellmRevision: String, snapshotDate: String,
-    online: Bool
+    online: Bool, onlineFetched: Bool? = nil
   ) {
     self.provider = provider
     self.ccusageRevision = ccusageRevision
     self.litellmRevision = litellmRevision
     self.snapshotDate = snapshotDate
     self.online = online
+    self.onlineFetched = onlineFetched
   }
 }
 
