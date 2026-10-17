@@ -8,7 +8,8 @@ version="$(tr -d '\n' < VERSION)"
 build_number="${BURNLESS_BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 
 echo "==> Building engine (Rust, ccusage)"
-cargo build --manifest-path engine/Cargo.toml --release --locked
+# Run inside engine/ so rustup applies engine/rust-toolchain.toml.
+(cd engine && cargo build --release --locked)
 
 echo "==> Building app (SwiftUI)"
 swift build --package-path app -c release --disable-keychain
