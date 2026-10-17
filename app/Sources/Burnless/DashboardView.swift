@@ -13,6 +13,7 @@ struct DashboardView: View {
     let dashboard = store.dashboard(for: harness)
     VStack(alignment: .leading, spacing: 14) {
       notices(dashboard)
+      meters
       if store.snapshot == nil {
         placeholder
       } else if !dashboard.hasAnyHistory {
@@ -30,10 +31,25 @@ struct DashboardView: View {
             if harness == nil { ByHarnessCard(dashboard: dashboard) }
           }
         }
+        if harness == nil { SubscriptionsCard() }
         ModelsCard(dashboard: dashboard)
         TokenBreakdownCard(totals: dashboard.totals)
+        if let harness { SubscriptionDetailsCard(harness: harness) }
         footnote(dashboard)
       }
+    }
+  }
+
+  /// Subscription limits lead each harness page, as in Agent Burn.
+  @ViewBuilder private var meters: some View {
+    switch harness {
+    case .claude: ClaudeAccountCard()
+    case .codex:
+      CodexQuotaCard()
+      if let days = store.quota?.codex.limitUsageDaily, days.contains(where: { $0.usedPercent > 0 }) {
+        CodexLimitUsageChart(days: days).burnCard()
+      }
+    case nil: EmptyView()
     }
   }
 
@@ -95,7 +111,7 @@ struct DashboardView: View {
           dashboard.scope.map { "\($0.name): \(availabilityText(store.snapshot?.availability($0)))" }
             .joined(separator: "\n"))
       } actions: {
-        Button("Open Settings") { store.route = .settings }
+        SettingsLink { Text("Open Settings") }
       }
     }
     .frame(maxWidth: .infinity, minHeight: 420)

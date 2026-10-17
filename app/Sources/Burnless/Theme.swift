@@ -23,6 +23,22 @@ enum BurnTheme {
     light: NSColor(white: 0, alpha: 0.05), dark: NSColor(white: 1, alpha: 0.06))
   static let warning = adaptive(
     light: NSColor(red: 0.62, green: 0.38, blue: 0.0, alpha: 1), dark: .systemYellow)
+  /// Recessed panels inside a card.
+  static let inset = adaptive(
+    light: NSColor(white: 0, alpha: 0.025), dark: NSColor(white: 0, alpha: 0.16))
+  static let line = Color(nsColor: .separatorColor).opacity(0.5)
+  static let grid = Color(nsColor: .separatorColor)
+  // Pace status: remaining above even pace is ahead, below is behind.
+  static let ahead = Color.green
+  static let behind = Color.red
+  /// Muted text that stays legible on menu material in both appearances.
+  static let quotaMuted = adaptive(
+    light: NSColor(white: 0.38, alpha: 1), dark: NSColor(white: 0.68, alpha: 1))
+
+  /// Tone for a remaining share: red under 15%, orange under 35%.
+  static func tone(remaining: Double) -> Color {
+    remaining < 15 ? behind : remaining < 35 ? .orange : .green
+  }
 
   /// Stable series colors, as in Agent Burn: Claude orange, Codex green.
   static func color(for harness: Harness) -> Color {
@@ -236,5 +252,44 @@ struct Notice: View {
       .background(
         (kind == .warning ? BurnTheme.warning : Color.secondary).opacity(0.08),
         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+  }
+}
+
+struct StatusBadge: View {
+  let text: String
+  var color: Color = .green
+  var body: some View {
+    HStack(spacing: 5) {
+      Circle().fill(color).frame(width: 5, height: 5)
+      Text(text).font(.system(size: 11, weight: .medium)).lineLimit(1).fixedSize()
+    }
+    .foregroundStyle(color)
+    .padding(.horizontal, 9).padding(.vertical, 5)
+    .background(color.opacity(0.09), in: Capsule())
+  }
+}
+
+struct SectionLabel: View {
+  let title: String
+  var detail: String = ""
+  var body: some View {
+    HStack {
+      Text(title).font(.system(size: 13, weight: .semibold))
+      Spacer()
+      if !detail.isEmpty { Text(detail).font(.system(size: 11)).foregroundStyle(BurnTheme.muted) }
+    }
+  }
+}
+
+/// Small quota pill: "62%" tinted by how much is left.
+struct QuotaBadge: View {
+  let remaining: Double
+  var body: some View {
+    let tone = BurnTheme.tone(remaining: remaining)
+    Text("\(Int(remaining.rounded(.down)))%")
+      .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+      .foregroundStyle(tone)
+      .padding(.horizontal, 6).padding(.vertical, 2)
+      .background(tone.opacity(0.14), in: Capsule())
   }
 }
