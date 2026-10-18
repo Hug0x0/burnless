@@ -13,7 +13,7 @@ capture() {
     --env BURNLESS_WINDOW_SIZE="$size" --env BURNLESS_ROUTE="$route" \
     --env BURNLESS_APPEARANCE="$appearance" --env BURNLESS_PERIOD="${PERIOD:-last30}" \
     --env BURNLESS_CAPTURE_WINDOW="${WINDOW:-dashboard}" --env BURNLESS_SETTINGS_TAB="${TAB:-general}" \
-    --env BURNLESS_POPOVER="$([[ "${WINDOW:-}" == popover ]] && echo 1 || echo 0)" \
+    --env BURNLESS_POPOVER="$([[ "${WINDOW:-}" == popover ]] && echo 1 || echo 0)" --env BURNLESS_POPOVER_TAB="${POPOVER_TAB:-general}" \
     "$root/dist/Burnless.app" ${1+--args "$@"}
   if [[ -f "$out/$name.png" ]]; then echo "$out/$name.png"; else echo "capture failed: $name" >&2; fi
 }
@@ -24,5 +24,6 @@ capture overview-dark 1240x1000 overview dark "$@"
 capture claude-dark 1240x1000 claude dark "$@"
 capture overview-small 780x900 overview light "$@"
 WINDOW=popover capture menu-bar none overview light "$@"
+WINDOW=popover POPOVER_TAB=codex capture menu-bar-codex none overview dark "$@"
 WINDOW=settings TAB=quotas capture settings-quotas none settings light "$@"
 WINDOW=settings TAB=general capture settings-general none settings light "$@"

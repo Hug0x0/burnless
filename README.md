@@ -14,11 +14,14 @@ and Codex only. Its data engine is [ccusage](https://github.com/ccusage/ccusage)
 | --- | --- | --- |
 | ![](docs/screenshots/claude.png) | ![](docs/screenshots/codex.png) | ![](docs/screenshots/menu-bar.png) |
 
-| Dark | Settings · Quotas |
-| --- | --- |
-| ![](docs/screenshots/claude-dark.png) | ![](docs/screenshots/settings-quotas.png) |
+| Dark | Menu bar · Codex | Settings · Quotas |
+| --- | --- | --- |
+| ![](docs/screenshots/overview-dark.png) | ![](docs/screenshots/menu-bar-codex.png) | ![](docs/screenshots/settings-quotas.png) |
 
-Screenshots use the built-in demo mode; none of these numbers are real usage.
+The layout follows the screenshots on Agent Burn's site: a page header, large
+numbers without icon badges, the system accent color and a flat menu bar
+popover. Screenshots use the built-in demo mode; none of these numbers are
+real usage.
 
 ## What it shows
 
