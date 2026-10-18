@@ -318,13 +318,22 @@ struct QuotaChartView: View {
   // MARK: Header and labels
 
   private var header: some View {
+    // Drops the cursor label rather than truncating it in narrow columns.
+    ViewThatFits(in: .horizontal) {
+      headerRow(cursor: !compact)
+      headerRow(cursor: false)
+    }
+  }
+
+  private func headerRow(cursor: Bool) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       series("Recorded", reading.recorded, color: (reading.paceDelta ?? 0) >= 0 ? color : BurnTheme.behind, dashed: false)
       if showsForecast { series("Forecast", reading.forecast, color: runsOut ? BurnTheme.behind : color, dashed: true) }
       if showsIdeal { series("Even pace", reading.ideal, color: muted, dashed: true) }
       Spacer(minLength: 4)
-      if !compact {
-        Text(cursorLabel).font(.system(size: 12)).foregroundStyle(muted).monospacedDigit().lineLimit(1)
+      if cursor {
+        Text(cursorLabel).font(.system(size: 12)).foregroundStyle(muted).monospacedDigit()
+          .lineLimit(1).fixedSize()
       }
     }
   }

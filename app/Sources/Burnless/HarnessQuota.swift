@@ -98,14 +98,34 @@ struct QuotaHero: View {
   let harness: Harness
   /// Weekly windows follow the chart range setting; sessions stay until reset.
   var followsRange = true
+  /// Stacks the chart under the details so two heroes fit side by side.
+  var stacked = false
+  /// Lets a grid place the details and chart in separate rows.
+  var part = Part.all
+
+  enum Part { case all, details, chart }
 
   var body: some View {
-    @Bindable var settings = store.settings
-    let now = store.clock
     if let forecast = store.forecast(series) {
-      let range = followsRange ? settings.quotaChartRange : .untilReset
-      HStack(alignment: .top, spacing: 36) {
-        VStack(alignment: .leading, spacing: 16) {
+      switch part {
+      case .details: details(forecast).frame(maxWidth: .infinity, alignment: .topLeading)
+      case .chart: chart(forecast)
+      case .all:
+        let layout = stacked
+          ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+          : AnyLayout(HStackLayout(alignment: .top, spacing: 36))
+        layout {
+          details(forecast)
+            .frame(maxWidth: stacked ? .infinity : 300, alignment: .leading)
+          chart(forecast)
+        }
+      }
+    }
+  }
+
+  private func details(_ forecast: Forecast) -> some View {
+    let now = store.clock
+    return VStack(alignment: .leading, spacing: 16) {
           HStack(spacing: 8) {
             Text(title).font(.system(size: 13)).foregroundStyle(BurnTheme.muted)
             Spacer(minLength: 4)
@@ -122,19 +142,22 @@ struct QuotaHero: View {
             QuotaOutlookLabel(outlook: .make(forecast))
             QuotaFacts(forecast: forecast, series: series, harness: harness)
           }
-        }
-        .frame(width: 300, alignment: .leading)
-        VStack(alignment: .trailing, spacing: 8) {
-          if followsRange { QuotaRangePicker(range: $settings.quotaChartRange) }
-          if !forecast.hasReset(at: now) {
-            QuotaChartView(
-              forecast: forecast, samples: store.samples(series, range: range),
-              color: BurnTheme.color(for: harness), range: range, now: now, height: 240)
-          }
-        }
-        .frame(maxWidth: .infinity)
+    }
+  }
+
+  private func chart(_ forecast: Forecast) -> some View {
+    @Bindable var settings = store.settings
+    let now = store.clock
+    let range = followsRange ? settings.quotaChartRange : .untilReset
+    return VStack(alignment: .trailing, spacing: 8) {
+      if followsRange { QuotaRangePicker(range: $settings.quotaChartRange) }
+      if !forecast.hasReset(at: now) {
+        QuotaChartView(
+          forecast: forecast, samples: store.samples(series, range: range),
+          color: BurnTheme.color(for: harness), range: range, now: now, height: stacked ? 200 : 240)
       }
     }
+    .frame(maxWidth: .infinity)
   }
 }
 
@@ -217,18 +240,35 @@ struct HarnessQuotaCard: View {
         Rectangle().fill(BurnTheme.line).frame(height: 1)
         QuotaUnavailable(harness: harness)
       } else {
-        if weekly != nil {
-          Rectangle().fill(BurnTheme.line).frame(height: 1)
-          QuotaHero(title: "Weekly limit", series: harness == .claude ? .claudeWeekly : .codexWeekly, harness: harness)
-        }
-        if session != nil {
-          Rectangle().fill(BurnTheme.line).frame(height: 1)
+        Rectangle().fill(BurnTheme.line).frame(height: 1)
+        let weeklySeries: QuotaSeries = harness == .claude ? .claudeWeekly : .codexWeekly
+        if weekly != nil && session != nil {
+          // Two grid rows keep both charts on the same baseline.
+          Grid(alignment: .topLeading, horizontalSpacing: 28, verticalSpacing: 18) {
+            GridRow {
+              QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .details)
+              divider
+              QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .details)
+            }
+            GridRow(alignment: .bottom) {
+              QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .chart)
+              divider
+              QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .chart)
+            }
+          }
+        } else if weekly != nil {
+          QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness)
+        } else {
           QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false)
         }
       }
       secondary(now: now)
     }
     .burnCard(padding: 22)
+  }
+
+  private var divider: some View {
+    Rectangle().fill(BurnTheme.line).frame(width: 1).frame(maxHeight: .infinity)
   }
 
   private var status: (text: String, color: Color) {
