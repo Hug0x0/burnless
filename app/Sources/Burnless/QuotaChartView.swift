@@ -321,9 +321,11 @@ struct QuotaChartView: View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       series("Recorded", reading.recorded, color: (reading.paceDelta ?? 0) >= 0 ? color : BurnTheme.behind, dashed: false)
       if showsForecast { series("Forecast", reading.forecast, color: runsOut ? BurnTheme.behind : color, dashed: true) }
-      if showsIdeal { series("Pace", reading.ideal, color: muted, dashed: true) }
+      if showsIdeal { series("Even pace", reading.ideal, color: muted, dashed: true) }
       Spacer(minLength: 4)
-      Text(cursorLabel).font(.system(size: 12)).foregroundStyle(muted).monospacedDigit().lineLimit(1)
+      if !compact {
+        Text(cursorLabel).font(.system(size: 12)).foregroundStyle(muted).monospacedDigit().lineLimit(1)
+      }
     }
   }
 
@@ -336,9 +338,10 @@ struct QuotaChartView: View {
       .stroke(color, style: StrokeStyle(lineWidth: 2, dash: dashed ? [3, 3] : []))
       .frame(width: 12, height: 1)
       Text(title).foregroundStyle(muted)
-      Text(QuotaText.percentOneDecimal(value)).monospacedDigit()
+      // The site's compact legend names the lines only.
+      if !compact { Text(QuotaText.percentOneDecimal(value)).monospacedDigit() }
     }
-    .font(.system(size: 12))
+    .font(.system(size: compact ? 13 : 12))
     .lineLimit(1)
     .fixedSize()
   }
