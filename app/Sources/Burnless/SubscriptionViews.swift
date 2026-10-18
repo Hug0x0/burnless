@@ -10,12 +10,12 @@ struct SpendMetric: View {
   let value: String
   var detail = ""
   var body: some View {
-    VStack(alignment: .leading, spacing: 7) {
-      Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-      Text(value).font(.system(size: 24, weight: .semibold, design: .rounded)).monospacedDigit()
-        .lineLimit(1).minimumScaleFactor(0.7)
+    VStack(alignment: .leading, spacing: 6) {
+      Text(title).font(.system(size: 13)).foregroundStyle(.secondary)
+      Text(value).font(.system(size: 30, weight: .semibold)).monospacedDigit()
+        .lineLimit(1).minimumScaleFactor(0.6)
         .contentTransition(.numericText()).animation(.snappy, value: value)
-      if !detail.isEmpty { Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
+      if !detail.isEmpty { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1) }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .accessibilityElement(children: .combine)
@@ -28,7 +28,7 @@ struct SubscriptionsCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      CardHeader(title: "Subscriptions", symbol: "creditcard.fill", tint: .purple) {
+      CardHeader(title: "Subscriptions") {
         Text("Weekly limit remaining")
       }
       ViewThatFits(in: .horizontal) {
@@ -55,37 +55,37 @@ struct SubscriptionsCard: View {
     let plan = store.plan(for: harness)
     let weekly = store.weekly(harness)
     let remaining = store.remaining(harness)
-    return VStack(alignment: .leading, spacing: 9) {
-      HStack(spacing: 10) {
-        HarnessBadge(harness: harness, size: 24)
-        VStack(alignment: .leading, spacing: 2) {
-          Text(harness.name).font(.system(size: 12, weight: .medium))
-          Text(plan.name ?? "Plan not detected").font(.system(size: 11)).foregroundStyle(.secondary)
+    return VStack(alignment: .leading, spacing: 14) {
+      HStack(spacing: 14) {
+        HarnessBadge(harness: harness, size: 40)
+        VStack(alignment: .leading, spacing: 3) {
+          Text(harness.name).font(.system(size: 15, weight: .semibold))
+          Text([plan.name ?? "Plan not detected", plan.pricePerMonth.map { Format.currency($0, wholeDollars: true) + " / month" }]
+            .compactMap { $0 }.joined(separator: " · "))
+            .font(.system(size: 13)).foregroundStyle(.secondary)
         }
         Spacer(minLength: 8)
-        Text(plan.pricePerMonth.map { Format.currency($0, wholeDollars: true) + "/mo" } ?? "—")
-          .font(.system(size: 12, weight: .semibold)).monospacedDigit()
       }
       if let remaining {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-          Text(QuotaText.percent(remaining.rounded())).font(.system(size: 19, weight: .semibold, design: .rounded))
-            .monospacedDigit().contentTransition(.numericText())
-          Text("left").font(.system(size: 11)).foregroundStyle(.secondary)
+          Text(remaining.formatted(.number.precision(.fractionLength(0))))
+            .font(.system(size: 36, weight: .medium)).monospacedDigit().contentTransition(.numericText())
+          Text("% remaining").font(.system(size: 13)).foregroundStyle(.secondary)
           Spacer()
           if let weekly, !weekly.hasReset(at: store.clock) {
-            Text("resets in " + QuotaText.duration(weekly.reset.timeIntervalSince(store.clock)))
-              .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+            Text("Resets in " + QuotaText.duration(weekly.reset.timeIntervalSince(store.clock)))
+              .font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
           }
         }
-        ShareBar(value: remaining / 100, tint: BurnTheme.tone(remaining: remaining), height: 4)
+        ShareBar(value: remaining / 100, tint: BurnTheme.tone(remaining: remaining), height: 5)
       } else {
-        Text("Weekly limit not read yet").font(.system(size: 11)).foregroundStyle(.secondary)
+        Text("Weekly limit not read yet").font(.system(size: 12)).foregroundStyle(.secondary)
       }
     }
-    .padding(10)
+    .padding(14)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(BurnTheme.hover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .background(BurnTheme.inset, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     .accessibilityElement(children: .combine)
   }
 }
@@ -102,16 +102,6 @@ struct SubscriptionDetailsCard: View {
     let value = SubscriptionMath.value(store.snapshot, harness: harness, plan: plan, now: now, calendar: store.calendar)
     DisclosureGroup(isExpanded: $expanded) {
       VStack(alignment: .leading, spacing: 22) {
-        HStack(alignment: .top) {
-          SpendMetric(
-            title: "Past 30 days", value: Format.spend(value.apiEquivalent), detail: "API-equivalent value")
-          SpendMetric(
-            title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0, wholeDollars: true) } ?? "Unknown",
-            detail: plan.name.map { $0 + (plan.isOverride ? " · set in Settings" : "") } ?? "Not detected")
-          SpendMetric(
-            title: "Subscription value", value: value.valueMultiple.map(Format.multiple) ?? "—",
-            detail: "Usage / monthly price")
-        }
         if let subsidy = value.subsidy, let discount = value.discountPercent {
           HStack {
             Text("API-equivalent minus plan: \(Format.currency(subsidy))")
@@ -141,7 +131,7 @@ struct SubscriptionDetailsCard: View {
       }
       .padding(.top, 18)
     } label: {
-      Text("Subscription economics, token costs and weekly trends").font(.system(size: 13, weight: .semibold))
+      Text("Subscription economics, token costs and weekly trends").font(.system(size: 15, weight: .semibold))
     }
     .burnCard()
   }

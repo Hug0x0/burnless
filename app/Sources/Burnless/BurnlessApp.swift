@@ -130,7 +130,7 @@ struct MainView: View {
           }
           .id(store.route)
           .transition(.opacity.combined(with: .offset(y: 8)))
-          .padding(20)
+          .padding(24)
           .frame(maxWidth: 1280)
           .frame(maxWidth: .infinity)
         }
@@ -140,10 +140,8 @@ struct MainView: View {
       }
       .background(BurnTheme.background)
       .navigationTitle(store.route.title)
-      .navigationSubtitle(store.period.label)
     }
     .frame(minWidth: 760, minHeight: 540)
-    .tint(BurnTheme.ember)
     .task {
       let environment = ProcessInfo.processInfo.environment
       if environment["BURNLESS_POPOVER"] == "1" { openWindow(id: "popover-preview") }
@@ -151,15 +149,6 @@ struct MainView: View {
     }
     .toolbar {
       ToolbarItem(placement: .navigation) { QuotaSourceMenu() }
-      ToolbarItem(placement: .primaryAction) {
-        @Bindable var store = store
-        Picker("Period", selection: $store.period) {
-          ForEach(Period.allCases) { Text($0.label).tag($0) }
-        }
-        .frame(width: 140)
-        .help("Spend period")
-        .accessibilityLabel("Period")
-      }
       ToolbarItemGroup(placement: .primaryAction) {
         Button {
           store.refreshAll()
@@ -219,7 +208,7 @@ private struct Sidebar: View {
     let all = store.dashboard(for: nil)
     List(selection: selection) {
       row(.overview, title: "Overview") {
-        IconBadge(symbol: "flame.fill", size: 20)
+        OverviewMark(size: 20)
       } trailing: {
         if store.snapshot != nil { spend(all.totals) }
       }

@@ -1,6 +1,6 @@
-// Dashboard composition follows Agent Burn's NativeUsageView
-// (https://github.com/Melvynx/agent-burn, MIT): metrics on top, spend and
-// By harness in the middle, models below.
+// Dashboard composition follows Agent Burn's NativeUsageView and the layout of
+// its site screenshots (https://github.com/Melvynx/agent-burn, MIT): a page
+// header, metrics on top, spend and By harness in the middle, models below.
 
 import BurnlessCore
 import SwiftUI
@@ -11,7 +11,8 @@ struct DashboardView: View {
 
   var body: some View {
     let dashboard = store.dashboard(for: harness)
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 18) {
+      header
       notices(dashboard)
       meters
       if store.snapshot == nil {
@@ -21,12 +22,12 @@ struct DashboardView: View {
       } else {
         MetricStrip(dashboard: dashboard)
         ViewThatFits(in: .horizontal) {
-          HStack(alignment: .top, spacing: 14) {
+          HStack(alignment: .top, spacing: 18) {
             chartCard(dashboard).frame(minWidth: 480)
-            if harness == nil { ByHarnessCard(dashboard: dashboard).frame(width: 280) }
+            if harness == nil { ByHarnessCard(dashboard: dashboard).frame(width: 330) }
           }
           .fixedSize(horizontal: false, vertical: true)
-          VStack(spacing: 14) {
+          VStack(spacing: 18) {
             chartCard(dashboard)
             if harness == nil { ByHarnessCard(dashboard: dashboard) }
           }
@@ -43,14 +44,36 @@ struct DashboardView: View {
   /// Subscription limits lead each harness page, as in Agent Burn.
   @ViewBuilder private var meters: some View {
     switch harness {
-    case .claude: ClaudeAccountCard()
+    case .claude: HarnessQuotaCard(harness: .claude)
     case .codex:
-      CodexQuotaCard()
+      HarnessQuotaCard(harness: .codex)
       if let days = store.quota?.codex.limitUsageDaily, days.contains(where: { $0.usedPercent > 0 }) {
         CodexLimitUsageChart(days: days).burnCard()
       }
     case nil: EmptyView()
     }
+  }
+
+  private var header: some View {
+    @Bindable var store = store
+    return PageHeader(title: harness?.name ?? "All harnesses", subtitle: subtitle) {
+      if let harness { HarnessBadge(harness: harness, size: 40) } else { OverviewMark() }
+    } trailing: {
+      Picker("Period", selection: $store.period) {
+        ForEach(Period.allCases) { Text($0.label).tag($0) }
+      }
+      .labelsHidden()
+      .controlSize(.large)
+      .frame(width: 170)
+      .help("Spend period")
+      .accessibilityLabel("Period")
+    }
+  }
+
+  private var subtitle: String {
+    guard let harness else { return store.period.label + " · usage from your Claude Code and Codex logs" }
+    return [store.plan(for: harness).name, store.period.label, "usage from your logs"].compactMap { $0 }
+      .joined(separator: " · ")
   }
 
   private func chartCard(_ dashboard: Dashboard) -> some View {
@@ -151,38 +174,34 @@ private struct MetricStrip: View {
 
   var body: some View {
     ViewThatFits(in: .horizontal) {
-      HStack(alignment: .top, spacing: 16) {
+      HStack(alignment: .top, spacing: 24) {
         spend
         Divider()
         tokens
         Divider()
-        rate
+        days
         Divider()
         models
-        Divider()
-        days
       }
-      Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 14) {
+      Grid(alignment: .topLeading, horizontalSpacing: 24, verticalSpacing: 18) {
         GridRow {
           spend
           tokens
         }
         GridRow {
-          rate
+          days
           models
         }
-        GridRow { days }
       }
     }
     .fixedSize(horizontal: false, vertical: true)
-    .burnCard(padding: 16)
+    .burnCard(padding: 22)
   }
 
   private var spend: some View {
     MetricTile(
       title: "Total spend", value: Format.spend(dashboard.totals),
-      detail: dashboard.totals.isPartial ? "API-equivalent value · partial" : "API-equivalent value",
-      symbol: "dollarsign"
+      detail: dashboard.totals.isPartial ? "API-equivalent value · partial" : "API-equivalent value"
     )
     .help(
       dashboard.totals.isPartial
@@ -193,7 +212,7 @@ private struct MetricStrip: View {
   private var tokens: some View {
     MetricTile(
       title: "Tokens", value: Format.tokens(dashboard.totals.tokens.total),
-      detail: "Input, output and cache", symbol: "square.stack.3d.up.fill", tint: .blue
+      detail: "Input, output and cache"
     ) {
       Button {
         showTokens.toggle()
@@ -210,31 +229,17 @@ private struct MetricStrip: View {
     }
   }
 
-  /// Agent Burn's "Avg tokens / $": priced tokens per known dollar.
-  private var rate: some View {
-    let priced = dashboard.totals.tokens.total - dashboard.totals.unpricedTokens
-    let value = dashboard.totals.cost > 0 && priced > 0 ? Double(priced) / dashboard.totals.cost : nil
-    return MetricTile(
-      title: "Avg tokens / $", value: value.map { Format.tokens(UInt64($0.rounded())) + " / $" } ?? "—",
-      detail: dashboard.period.label, symbol: "gauge.with.dots.needle.50percent", tint: .green
-    )
-    .help("Tokens with a known price divided by their API-equivalent spend.")
+  private var days: some View {
+    MetricTile(title: "Days recorded", value: dashboard.daysRecorded.formatted(), detail: "All time")
+      .help("Distinct days with recorded usage in all available history. Not affected by the period filter.")
   }
 
   private var models: some View {
     MetricTile(
       title: "Models", value: dashboard.models.filter { $0.model != nil }.count.formatted(),
-      detail: dashboard.harness?.name ?? "Across all harnesses", symbol: "cpu", tint: .purple
+      detail: dashboard.harness?.name ?? "Across all harnesses"
     )
     .help("Distinct models observed in this period's local history.")
-  }
-
-  private var days: some View {
-    MetricTile(
-      title: "Days recorded", value: dashboard.daysRecorded.formatted(), detail: "All time",
-      symbol: "calendar", tint: .green
-    )
-    .help("Distinct days with recorded usage in all available history. Not affected by the period filter.")
   }
 }
 
@@ -282,32 +287,22 @@ private struct ByHarnessCard: View {
   let dashboard: Dashboard
 
   var body: some View {
-    let top = max(dashboard.harnesses.map(\.totals.cost).max() ?? 0, 0.01)
-    VStack(alignment: .leading, spacing: 10) {
-      CardHeader(title: "By harness", symbol: "square.split.2x1.fill") {
-        Text("\(dashboard.harnesses.filter { $0.availability.hasData }.count) of 2 available")
-      }
-      VStack(spacing: 2) {
+    VStack(alignment: .leading, spacing: 14) {
+      CardHeader(title: "By harness")
+      VStack(spacing: 6) {
         ForEach(dashboard.harnesses.sorted { $0.totals.cost > $1.totals.cost }) { summary in
           Button {
             store.route = .harness(summary.harness)
           } label: {
-            HStack(spacing: 10) {
-              HarnessBadge(harness: summary.harness, size: 26)
-              VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline) {
-                  Text(summary.harness.name).font(.system(size: 12, weight: .medium))
-                  Spacer()
-                  Text(summary.availability.hasData ? Format.spend(summary.totals) : "—")
-                    .font(.system(size: 12, weight: .semibold))
-                }
-                ShareBar(
-                  value: summary.totals.cost / top, tint: BurnTheme.color(for: summary.harness),
-                  height: 4)
-                Text(caption(summary)).font(.system(size: 10)).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+              HarnessBadge(harness: summary.harness, size: 40)
+              VStack(alignment: .leading, spacing: 3) {
+                Text(summary.harness.name).font(.system(size: 15, weight: .semibold))
+                Text(caption(summary)).font(.system(size: 13)).foregroundStyle(.secondary)
               }
-              Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.tertiary)
+              Spacer(minLength: 8)
+              Text(summary.availability.hasData ? Format.spend(summary.totals) : "—")
+                .font(.system(size: 15, weight: .semibold))
             }
             .monospacedDigit()
           }
@@ -349,19 +344,16 @@ private struct ModelsCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      CardHeader(title: "Models", symbol: "cpu", tint: .purple) {
-        HStack(spacing: 10) {
-          Text("\(dashboard.models.count) · Available source data")
-          HStack(spacing: 5) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
-            TextField("Filter models", text: $search).textFieldStyle(.plain)
-              .font(.system(size: 12))
-              .accessibilityLabel("Filter models by name")
-          }
-          .padding(.horizontal, 9).padding(.vertical, 5)
-          .frame(width: 190)
-          .background(BurnTheme.track, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
+      HStack(spacing: 10) {
+        Text("Models · available source data").font(.system(size: 15, weight: .semibold))
+          .accessibilityAddTraits(.isHeader)
+        Text("\(dashboard.models.count)").font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
+        Spacer(minLength: 8)
+        TextField("Filter models", text: $search)
+          .textFieldStyle(.roundedBorder)
+          .controlSize(.large)
+          .frame(width: 240)
+          .accessibilityLabel("Filter models by name")
       }
       if dashboard.models.isEmpty {
         Label("No model usage recorded in this period.", systemImage: "cpu")
@@ -373,7 +365,7 @@ private struct ModelsCard: View {
           .frame(maxWidth: .infinity, minHeight: 60)
       } else {
         table
-          .frame(height: CGFloat(min(9, max(3, filtered.count))) * 24 + 36)
+          .frame(height: CGFloat(min(9, max(3, filtered.count))) * 26 + 36)
           .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
       }
       dataNotes
@@ -385,12 +377,6 @@ private struct ModelsCard: View {
     Table(filtered, sortOrder: $order) {
       TableColumn("Model", value: \.displayName) { model in
         HStack(spacing: 6) {
-          if dashboard.harness == nil {
-            ForEach(model.harnesses) { harness in
-              Circle().fill(BurnTheme.color(for: harness)).frame(width: 6, height: 6)
-                .help(harness.name)
-            }
-          }
           Text(model.displayName)
             .foregroundStyle(model.model == nil ? .secondary : .primary)
             .help(model.displayName)
@@ -415,15 +401,8 @@ private struct ModelsCard: View {
         }
       }.width(min: 70, ideal: 100)
       TableColumn("Share", value: \.share) { model in
-        HStack(spacing: 8) {
-          Capsule().fill(BurnTheme.track).frame(width: 44, height: 4)
-            .overlay(alignment: .leading) {
-              Capsule().fill(BurnTheme.ember).frame(width: max(2, 44 * model.share), height: 4)
-            }
-            .accessibilityHidden(true)
-          Text(dashboard.totals.cost > 0 ? Format.percent(model.share) : "—")
-            .monospacedDigit().foregroundStyle(.secondary)
-        }
+        Text(dashboard.totals.cost > 0 ? Format.percent(model.share) : "—")
+          .monospacedDigit().foregroundStyle(.secondary)
       }.width(min: 90, ideal: 120)
     }
     .tableStyle(.inset(alternatesRowBackgrounds: true))
@@ -460,7 +439,7 @@ private struct TokenBreakdownCard: View {
     let parts = tokenParts(totals.tokens)
     let total = max(1, totals.tokens.total)
     VStack(alignment: .leading, spacing: 14) {
-      CardHeader(title: "Token breakdown", symbol: "square.stack.3d.up.fill", tint: .blue) {
+      CardHeader(title: "Token breakdown") {
         Text("Available source data")
       }
       GeometryReader { geometry in
@@ -495,7 +474,7 @@ private struct TokenBreakdownCard: View {
           Circle().fill(part.color).frame(width: 7, height: 7)
           Text(part.label).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
         }
-        Text(Format.tokens(part.value)).font(.system(size: 20, weight: .semibold, design: .rounded))
+        Text(Format.tokens(part.value)).font(.system(size: 22, weight: .semibold))
         Text(Format.percent(Double(part.value) / Double(total)))
           .font(.system(size: 11)).foregroundStyle(.secondary)
       }
