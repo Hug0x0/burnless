@@ -44,28 +44,37 @@ struct SpendChart: View {
     VStack(alignment: .leading, spacing: 14) {
       header
       chart
-        .frame(height: 190)
+        .frame(height: 220)
         .overlay { emptyOverlay }
-      legend
+      if hasNotes { legend }
     }
   }
 
+  private var hasNotes: Bool {
+    !dashboard.unavailable.isEmpty || !dashboard.stale.isEmpty || buckets.contains(where: \.isUnknown)
+  }
+
   private var header: some View {
-    HStack(spacing: 8) {
-      IconBadge(symbol: "chart.bar.fill", tint: dashboard.harness.map(BurnTheme.color) ?? BurnTheme.ember)
-      Text(effective.title).font(.system(size: 13, weight: .semibold))
+    HStack(spacing: 10) {
+      Text(effective.title).font(.system(size: 15, weight: .semibold))
         .accessibilityAddTraits(.isHeader)
       Picker("Granularity", selection: binding) {
         ForEach(Granularity.allCases) { Text($0.label).tag($0) }
       }
-      .pickerStyle(.segmented)
+      .pickerStyle(.menu)
+      .menuStyle(.borderlessButton)
       .labelsHidden()
-      .frame(width: 180)
+      .fixedSize()
+      .foregroundStyle(.secondary)
       .accessibilityLabel("Spend granularity")
       Spacer(minLength: 8)
-      Text("USD").font(.caption).foregroundStyle(.secondary)
+      Text("USD").font(.system(size: 12)).foregroundStyle(.secondary)
     }
   }
+
+  /// One color per page, as on Agent Burn's site: the accent for all
+  /// harnesses, the harness color on its own page.
+  private var barColor: Color { dashboard.harness.map(BurnTheme.color) ?? BurnTheme.accent }
 
   private var chart: some View {
     Chart {
@@ -77,18 +86,15 @@ struct SpendChart: View {
           .foregroundStyle(BurnTheme.unknown)
           .accessibilityLabel("\(label(bucket)): not read")
         }
-        ForEach(series) { harness in
-          let cost = bucket.costs[harness] ?? 0
-          if cost > 0 {
-            BarMark(
-              x: .value("Date", bucket.start, unit: unit),
-              y: .value("Spend", cost)
-            )
-            .foregroundStyle(by: .value("Harness", harness.name))
-            .opacity(selectedBucket == nil || selectedBucket?.id == bucket.id ? 1 : 0.35)
-            .accessibilityLabel("\(harness.name), \(label(bucket))")
-            .accessibilityValue(Format.currency(cost))
-          }
+        if bucket.cost > 0 {
+          BarMark(
+            x: .value("Date", bucket.start, unit: unit),
+            y: .value("Spend", bucket.cost)
+          )
+          .foregroundStyle(barColor.gradient)
+          .opacity(selectedBucket == nil || selectedBucket?.id == bucket.id ? 1 : 0.35)
+          .accessibilityLabel(label(bucket))
+          .accessibilityValue(Format.currency(bucket.cost))
         }
       }
       if let bucket = selectedBucket {
@@ -101,11 +107,6 @@ struct SpendChart: View {
           ) { tooltip(bucket) }
       }
     }
-    .chartForegroundStyleScale(
-      domain: Harness.allCases.map(\.name),
-      range: Harness.allCases.map { BurnTheme.color(for: $0) }
-    )
-    .chartLegend(.hidden)
     // Screenshots ignore wherever the real pointer happens to be.
     .chartXSelection(value: WindowCapture.isActive ? .constant(nil) : $selected)
     .chartXScale(domain: domain)
@@ -201,13 +202,12 @@ struct SpendChart: View {
 
   private var legend: some View {
     HStack(spacing: 14) {
-      ForEach(series) { harness in
+      ForEach(series.filter { dashboard.unavailable.contains($0) || dashboard.stale.contains($0) }) { harness in
         HStack(spacing: 5) {
-          Circle().fill(BurnTheme.color(for: harness)).frame(width: 7, height: 7)
           Text(harness.name)
           if dashboard.unavailable.contains(harness) {
             Text("· unavailable").foregroundStyle(.tertiary)
-          } else if dashboard.stale.contains(harness) {
+          } else {
             Text("· saved data").foregroundStyle(BurnTheme.warning)
           }
         }

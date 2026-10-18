@@ -23,7 +23,6 @@ struct SettingsView: View {
       AboutSettings().tabItem { Label("About", systemImage: "flame") }.tag(SettingsTab.about)
     }
     .frame(width: 620, height: 600)
-    .tint(BurnTheme.ember)
     .onAppear { tab = initialTab }
   }
 }

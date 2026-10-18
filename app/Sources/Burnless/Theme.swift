@@ -7,6 +7,8 @@ import SwiftUI
 enum BurnTheme {
   static let background = Color(nsColor: .windowBackgroundColor)
   static let muted = Color.secondary
+  /// Interface accent, as on Agent Burn's site: the system accent (blue by default).
+  static let accent = Color.accentColor
   /// Accent: Agent Burn's flame.
   static let ember = adaptive(
     light: NSColor(red: 0.86, green: 0.36, blue: 0.05, alpha: 1),
@@ -64,8 +66,8 @@ enum BurnTheme {
 }
 
 struct BurnCardModifier: ViewModifier {
-  var padding: CGFloat = 16
-  var radius: CGFloat = 14
+  var padding: CGFloat = 18
+  var radius: CGFloat = 16
   func body(content: Content) -> some View {
     content
       .padding(padding)
@@ -80,7 +82,7 @@ struct BurnCardModifier: ViewModifier {
 }
 
 extension View {
-  func burnCard(padding: CGFloat = 16, radius: CGFloat = 14) -> some View {
+  func burnCard(padding: CGFloat = 18, radius: CGFloat = 16) -> some View {
     modifier(BurnCardModifier(padding: padding, radius: radius))
   }
 
@@ -148,12 +150,12 @@ struct CardHeader<Trailing: View>: View {
   var tint: Color = BurnTheme.ember
   @ViewBuilder var trailing: Trailing
   var body: some View {
+    // `symbol` and `tint` are kept for call sites; the site design shows bare titles.
     HStack(spacing: 8) {
-      if let symbol { IconBadge(symbol: symbol, tint: tint) }
-      Text(title).font(.system(size: 13, weight: .semibold))
+      Text(title).font(.system(size: 15, weight: .semibold))
         .accessibilityAddTraits(.isHeader)
       Spacer(minLength: 8)
-      trailing.font(.system(size: 11)).foregroundStyle(BurnTheme.muted)
+      trailing.font(.system(size: 12)).foregroundStyle(BurnTheme.muted)
     }
   }
 }
@@ -172,21 +174,20 @@ struct MetricTile<Accessory: View>: View {
   var tint: Color = BurnTheme.ember
   @ViewBuilder var accessory: Accessory
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 7) {
-        if let symbol { IconBadge(symbol: symbol, tint: tint, size: 20) }
-        Text(title).font(.system(size: 12, weight: .medium))
+        Text(title).font(.system(size: 13))
           .foregroundStyle(BurnTheme.muted).lineLimit(1)
         Spacer(minLength: 0)
         accessory
       }
       Text(value)
-        .font(.system(size: 24, weight: .semibold, design: .rounded))
-        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+        .font(.system(size: 32, weight: .semibold))
+        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.55)
         .contentTransition(.numericText())
         .animation(.snappy, value: value)
       if !detail.isEmpty {
-        Text(detail).font(.system(size: 11))
+        Text(detail).font(.system(size: 12))
           .foregroundStyle(BurnTheme.muted).lineLimit(1)
       }
     }
@@ -274,9 +275,9 @@ struct SectionLabel: View {
   var detail: String = ""
   var body: some View {
     HStack {
-      Text(title).font(.system(size: 13, weight: .semibold))
+      Text(title).font(.system(size: 14, weight: .semibold))
       Spacer()
-      if !detail.isEmpty { Text(detail).font(.system(size: 11)).foregroundStyle(BurnTheme.muted) }
+      if !detail.isEmpty { Text(detail).font(.system(size: 12)).foregroundStyle(BurnTheme.muted) }
     }
   }
 }
@@ -291,5 +292,39 @@ struct QuotaBadge: View {
       .foregroundStyle(tone)
       .padding(.horizontal, 6).padding(.vertical, 2)
       .background(tone.opacity(0.14), in: Capsule())
+  }
+}
+
+/// Page title as on Agent Burn's site: a large icon, the title, a subtitle
+/// line and controls on the right.
+struct PageHeader<Icon: View, Trailing: View>: View {
+  let title: String
+  let subtitle: String
+  @ViewBuilder var icon: Icon
+  @ViewBuilder var trailing: Trailing
+  var body: some View {
+    HStack(alignment: .center, spacing: 14) {
+      icon.frame(width: 40, height: 40)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title).font(.system(size: 22, weight: .semibold)).lineLimit(1)
+          .accessibilityAddTraits(.isHeader)
+        Text(subtitle).font(.system(size: 13)).foregroundStyle(BurnTheme.muted).lineLimit(1)
+      }
+      Spacer(minLength: 12)
+      trailing
+    }
+    .padding(.horizontal, 4).padding(.top, 4).padding(.bottom, 6)
+  }
+}
+
+/// The "All harnesses" mark: bars in the accent color.
+struct OverviewMark: View {
+  var size: CGFloat = 40
+  var body: some View {
+    Image(systemName: "chart.bar.fill")
+      .font(.system(size: size * 0.78, weight: .regular))
+      .foregroundStyle(BurnTheme.accent)
+      .frame(width: size, height: size)
+      .accessibilityHidden(true)
   }
 }
