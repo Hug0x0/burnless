@@ -1,6 +1,6 @@
 //! End-to-end checks of burnless-engine against synthetic history folders.
 //!
-//! Each test builds a throwaway HOME with fake Claude Code / Codex logs, runs
+//! Each test builds a throwaway HOME with fake Claude Code / Codex / Gemini CLI logs, runs
 //! the real binary, and checks the JSON report. No real history is touched.
 
 use std::{
@@ -129,6 +129,24 @@ fn sum(rows: &[&Value], field: &str) -> u64 {
     rows.iter().map(|row| row[field].as_u64().unwrap()).sum()
 }
 
+fn gemini_message(id: &str, timestamp: &str, model: &str, input: u64, cached: u64, output: u64, thoughts: u64) -> Value {
+    json!({
+        "id": id,
+        "timestamp": timestamp,
+        "type": "gemini",
+        "content": "not read",
+        "model": model,
+        "tokens": {
+            "input": input,
+            "output": output,
+            "cached": cached,
+            "thoughts": thoughts,
+            "tool": 0,
+            "total": input + output + thoughts
+        }
+    })
+}
+
 #[test]
 fn report_has_versioned_schema_and_pricing_provenance() {
     let fixture = Fixture::new();
@@ -146,6 +164,7 @@ fn missing_sources_are_reported_as_not_found() {
     let report = fixture.run("UTC");
     assert_eq!(source(&report, "claude")["state"], "notFound");
     assert_eq!(source(&report, "codex")["state"], "notFound");
+    assert_eq!(source(&report, "gemini")["state"], "notFound");
     assert_eq!(report["rows"].as_array().unwrap().len(), 0);
 }
 
@@ -503,4 +522,49 @@ fn row_cost_breakdown_adds_up_to_the_row_cost() {
     assert!((parts - cost).abs() < 1e-9);
     // Output tokens cost more per token than input tokens.
     assert!(row["costBreakdown"]["output"].as_f64().unwrap() > row["costBreakdown"]["input"].as_f64().unwrap());
+}
+
+#[test]
+fn gemini_chat_sessions_are_read_with_thinking_as_output() {
+    let fixture = Fixture::new();
+    let session = json!({
+        "sessionId": "gemini-session-1",
+        "projectHash": "abc",
+        "startTime": "2026-10-20T09:00:00.000Z",
+        "messages": [
+            {"id": "u1", "timestamp": "2026-10-20T09:00:00.000Z", "type": "user", "content": "hi"},
+            gemini_message("g1", "2026-10-20T09:00:05.000Z", "gemini-2.5-pro", 1000, 400, 100, 50),
+            gemini_message("g2", "2026-10-20T09:01:00.000Z", "gemini-2.5-flash", 500, 0, 20, 0),
+        ]
+    });
+    fixture.write(".gemini/tmp/abc/chats/session-2026-10-20T09-00-a.json", &[session.to_string()]);
+    let report = fixture.run("UTC");
+    assert_eq!(source(&report, "gemini")["state"], "ok");
+    let gemini = rows(&report, "gemini");
+    assert_eq!(gemini.len(), 2);
+    let pro = gemini.iter().find(|row| row["model"] == "gemini-2.5-pro").unwrap();
+    // Input includes cache in Gemini's counters; the cached part is split out.
+    assert_eq!(pro["inputTokens"], 600);
+    assert_eq!(pro["cacheReadTokens"], 400);
+    assert_eq!(pro["outputTokens"], 150);
+    assert_eq!(pro["reasoningTokens"], 50);
+    assert_eq!(pro["totalTokens"], 1150);
+    assert!(pro["costUSD"].as_f64().unwrap() > 0.0);
+    assert_eq!(pro["missingPricing"], false);
+    assert_eq!(sum(&gemini, "totalTokens"), 1150 + 520);
+}
+
+#[test]
+fn gemini_data_dir_override_is_honoured() {
+    let fixture = Fixture::new();
+    let session = json!({
+        "sessionId": "s",
+        "messages": [gemini_message("g1", "2026-10-20T09:00:05.000Z", "gemini-2.5-flash", 100, 0, 10, 0)]
+    });
+    fixture.write("elsewhere/gemini/abc/chats/session-a.json", &[session.to_string()]);
+    let dir = fixture.path("elsewhere/gemini");
+    let report = fixture.run_with("UTC", &[("GEMINI_DATA_DIR", &dir)]);
+    assert_eq!(source(&report, "gemini")["state"], "ok");
+    assert_eq!(source(&report, "gemini")["envOverride"], true);
+    assert_eq!(sum(&rows(&report, "gemini"), "totalTokens"), 110);
 }

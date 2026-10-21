@@ -3,7 +3,9 @@ import Testing
 
 @testable import BurnlessCore
 
-func report(_ rows: [UsageRow], claude: SourceState = .ok, codex: SourceState = .ok)
+func report(
+  _ rows: [UsageRow], claude: SourceState = .ok, codex: SourceState = .ok, gemini: SourceState = .ok
+)
   -> EngineReport
 {
   EngineReport(
@@ -11,6 +13,7 @@ func report(_ rows: [UsageRow], claude: SourceState = .ok, codex: SourceState = 
     sources: [
       SourceStatus(id: .claude, state: claude, error: claude == .error ? "boom" : nil),
       SourceStatus(id: .codex, state: codex, error: codex == .error ? "boom" : nil),
+      SourceStatus(id: .gemini, state: gemini, error: gemini == .error ? "boom" : nil),
     ],
     rows: rows)
 }

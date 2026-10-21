@@ -1,6 +1,6 @@
 # Burnless
 
-A native macOS app for **Claude Code** and **Codex**: API-equivalent spend, tokens,
+A native macOS app for **Claude Code**, **Codex** and **Gemini CLI**: API-equivalent spend, tokens,
 models, subscription limits with pace and forecast, plan value, and a menu bar
 quota. Everything is read from files on your Mac by default.
 
@@ -36,9 +36,12 @@ real usage.
   pace, $ per percent, banked resets and the shorter window when Codex reports one. The
   chart range is selectable (Until reset, Reset to today, Today, Last 7 / 30 days). With
   live limits, the weekly limit used per day by surface or by model.
+- **Gemini CLI**: usage only (spend, tokens, models, daily chart). Gemini CLI keeps no
+  limit reading on disk, so there is no quota chart; run `/stats` in Gemini CLI for that.
 - **Plans**: detected from `~/.claude.json` (Claude rate-limit tier) and Codex's logs
   (plan type), with monthly prices for known plans (Pro, Max 5×, Max 20×, Plus, Pro).
-  Unknown prices stay unknown; set one in Settings → Quotas.
+  Unknown prices stay unknown; set one in Settings → Quotas. Gemini CLI logs no plan:
+  enter `plus`, `pro` or `ultra` (Google AI Plus $4.99, Pro $19.99, Ultra $249.99) or a price.
 - **Subscription economics**: last 30 days at API prices vs. the plan price (value
   multiple, subsidy, discount), daily usage in the current window, spend by token type,
   8-week trend, quota value estimate and Codex image generations.
@@ -97,7 +100,7 @@ Node, npx, Rust or ccusage installed to run.
 Layout:
 
 ```
-engine/   Rust CLI on top of ccusage's Claude and Codex adapters → versioned JSON
+engine/   Rust CLI on top of ccusage's Claude, Codex and Gemini adapters → versioned JSON
 app/      SwiftPM package
   Sources/BurnlessCore   report decoding, merge/cache, aggregation (UI-free, tested)
   Sources/Burnless       SwiftUI + Swift Charts app
@@ -116,6 +119,7 @@ Burnless only reads local history. It uses ccusage's resolution:
 | --- | --- | --- |
 | Claude Code | `~/.config/claude/projects`, `~/.claude/projects` | `CLAUDE_CONFIG_DIR` (comma-separated) |
 | Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` | `CODEX_HOME` (comma-separated) |
+| Gemini CLI | `~/.gemini/tmp/<project>/chats` | `GEMINI_DATA_DIR` (comma-separated) |
 
 Settings → Sources shows the folders being read and lets you **Choose Folder…**
 for each harness (passed to the engine as the variables above). If one source is
@@ -169,6 +173,8 @@ The engine (`engine/`) calls ccusage's own loaders. It does not reimplement the 
 
 - **Claude Code**: `load_daily_summaries_with_detection`, with ccusage's message/request
   deduplication across files and resumed sessions.
+- **Gemini CLI**: `load_entries` + `summarize_entries` (daily). Cached input is split from
+  input; thinking tokens are billed as output and also shown as reasoning.
 - **Codex**: `load_groups` (daily). This turns the cumulative `total_token_usage`
   counters into deltas and skips repeated counters. Copies of a session in
   `archived_sessions` are not counted twice.
@@ -220,7 +226,8 @@ between the two runs.
 
 ## Limits
 
-- Only Claude Code and Codex (no Cursor or other harnesses, by design).
+- Only Claude Code, Codex and Gemini CLI (no Cursor or other harnesses, by design). Gemini
+  usage in the Gemini app or Antigravity is not in Gemini CLI's logs and is not counted.
 - Without live limits, Claude's meters are only as recent as Claude Code's own last check.
   Codex's daily breakdown by surface and model needs live limits.
 - Plan prices are a built-in table; Codex Pro Lite and team plans have no price until

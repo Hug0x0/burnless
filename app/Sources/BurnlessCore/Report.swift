@@ -1,8 +1,8 @@
 import Foundation
 
-/// The two sources Burnless reads. Raw values match the engine's `source` ids.
+/// The sources Burnless reads. Raw values match the engine's `source` ids.
 public enum Harness: String, Codable, CaseIterable, Identifiable, Sendable, Comparable {
-  case claude, codex
+  case claude, codex, gemini
 
   public var id: String { rawValue }
 
@@ -10,8 +10,13 @@ public enum Harness: String, Codable, CaseIterable, Identifiable, Sendable, Comp
     switch self {
     case .claude: "Claude Code"
     case .codex: "Codex"
+    case .gemini: "Gemini CLI"
     }
   }
+
+  /// Whether Burnless reads a subscription limit meter for this harness.
+  /// Gemini CLI saves no limit reading on disk, so it shows usage only.
+  public var readsLimits: Bool { self != .gemini }
 
   public static func < (lhs: Harness, rhs: Harness) -> Bool {
     allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!

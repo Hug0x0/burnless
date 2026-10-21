@@ -30,6 +30,7 @@ struct BurnlessApp: App {
     switch environment["BURNLESS_ROUTE"] {
     case "claude": store.route = .harness(.claude)
     case "codex": store.route = .harness(.codex)
+    case "gemini": store.route = .harness(.gemini)
     default: break
     }
     if let period = environment["BURNLESS_PERIOD"].flatMap(Period.init(rawValue:)) {
@@ -178,7 +179,7 @@ private struct QuotaSourceMenu: View {
 
   var body: some View {
     Menu {
-      ForEach(Harness.allCases) { harness in
+      ForEach(Harness.allCases.filter(\.readsLimits)) { harness in
         Button {
           store.settings.menuBarQuota = harness
         } label: {

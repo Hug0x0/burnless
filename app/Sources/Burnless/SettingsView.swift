@@ -64,7 +64,7 @@ private struct GeneralSettings: View {
           .onChange(of: settings.showInMenuBar) { settings.applyActivationPolicy() }
         Toggle("Menu bar only", isOn: $settings.menuBarOnly).disabled(!settings.showInMenuBar)
         Picker("Show remaining", selection: $settings.menuBarQuota) {
-          ForEach(Harness.allCases) { Text($0.name).tag($0) }
+          ForEach(Harness.allCases.filter(\.readsLimits)) { Text($0.name).tag($0) }
         }
       } header: {
         Text("Menu bar")
@@ -167,6 +167,7 @@ private struct SourceRow: View {
     switch harness {
     case .claude: Binding(get: { store.settings.claudeDirectory }, set: { store.settings.claudeDirectory = $0 })
     case .codex: Binding(get: { store.settings.codexHome }, set: { store.settings.codexHome = $0 })
+    case .gemini: Binding(get: { store.settings.geminiDirectory }, set: { store.settings.geminiDirectory = $0 })
     }
   }
 
@@ -199,14 +200,19 @@ private struct SourceRow: View {
           }
         }
       }
-      Text(
-        harness == .claude
-          ? "Pick a Claude config folder (containing projects/) or the projects folder itself. Same as CLAUDE_CONFIG_DIR."
-          : "Pick a Codex home folder (containing sessions/). Same as CODEX_HOME."
-      )
+      Text(folderHint)
       .font(.caption2).foregroundStyle(.tertiary)
     }
     .padding(.vertical, 4)
+  }
+
+  private var folderHint: String {
+    switch harness {
+    case .claude:
+      "Pick a Claude config folder (containing projects/) or the projects folder itself. Same as CLAUDE_CONFIG_DIR."
+    case .codex: "Pick a Codex home folder (containing sessions/). Same as CODEX_HOME."
+    case .gemini: "Pick Gemini CLI's data folder (~/.gemini/tmp, holding <project>/chats/). Same as GEMINI_DATA_DIR."
+    }
   }
 
   private func choose() {
@@ -261,11 +267,12 @@ private struct QuotaSettings: View {
       Section {
         PlanRow(harness: .claude, text: $settings.claudePlan)
         PlanRow(harness: .codex, text: $settings.codexPlan)
+        PlanRow(harness: .gemini, text: $settings.geminiPlan)
       } header: {
         Text("Plans")
       } footer: {
         Text(
-          "Detected from ~/.claude.json and Codex's logs. Enter a monthly price (for example 200) or a plan name (pro, max-5x, max-20x, plus) to override it. Unknown prices are left blank, never treated as $0."
+          "Detected from ~/.claude.json and Codex's logs. Gemini CLI logs no plan: enter plus, pro or ultra (Google AI plans). Enter a monthly price (for example 200) or a plan name (pro, max-5x, max-20x, plus) to override a plan. Unknown prices are left blank, never treated as $0."
         )
         .font(.caption).foregroundStyle(.secondary)
       }
@@ -302,7 +309,7 @@ private struct PlanRow: View {
   var body: some View {
     let plan = store.plan(for: harness)
     LabeledContent {
-      TextField("Override", text: $text, prompt: Text("Detected"))
+      TextField("Override", text: $text, prompt: Text(harness.readsLimits ? "Detected" : "plus, pro…"))
         .labelsHidden()
         .frame(width: 110)
         .multilineTextAlignment(.trailing)
@@ -474,7 +481,7 @@ private struct AboutSettings: View {
         Text("Version \(appVersion)").font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
       }
       Text(
-        "Spend, tokens and subscription limits for Claude Code and Codex. Usage is read from local logs and never sent to a Burnless service."
+        "Spend, tokens and subscription limits for Claude Code, Codex and Gemini CLI. Usage is read from local logs and never sent to a Burnless service."
       )
       .font(.system(size: 12)).foregroundStyle(.secondary)
       .multilineTextAlignment(.center).frame(maxWidth: 400)

@@ -16,13 +16,14 @@ struct MenuBarLabel: View {
 }
 
 enum PopoverTab: String, CaseIterable, Identifiable {
-  case general, codex, claude
+  case general, codex, claude, gemini
   var id: String { rawValue }
   var label: String {
     switch self {
     case .general: "General"
     case .codex: "Codex"
     case .claude: "Claude"
+    case .gemini: "Gemini"
     }
   }
   var harness: Harness? {
@@ -30,6 +31,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
     case .general: nil
     case .codex: .codex
     case .claude: .claude
+    case .gemini: .gemini
     }
   }
 }
@@ -71,6 +73,7 @@ struct MenuPopover: View {
           case .general: CompactOverview(select: { tab = $0 })
           case .codex: CompactHarness(harness: .codex)
           case .claude: CompactHarness(harness: .claude)
+          case .gemini: CompactHarness(harness: .gemini)
           }
         }
         .id(tab)
@@ -215,9 +218,9 @@ private struct CompactOverview: View {
         }
         VStack(alignment: .leading, spacing: 14) {
           Text("Weekly limit remaining").font(.system(size: 13)).foregroundStyle(BurnTheme.quotaMuted)
-          ForEach(Harness.allCases) { harness in
+          ForEach(Harness.allCases.filter(\.readsLimits)) { harness in
             Button {
-              withAnimation(.snappy) { select(harness == .codex ? .codex : .claude) }
+              withAnimation(.snappy) { select(PopoverTab(rawValue: harness.rawValue) ?? .general) }
             } label: {
               quotaRow(harness)
             }
@@ -315,7 +318,9 @@ private struct CompactHarness: View {
         details(forecast: forecast, now: now)
       } else {
         VStack(alignment: .leading, spacing: 8) {
-          Text(store.quota == nil ? "Reading limits…" : "Limit not read yet").font(.system(size: 20, weight: .semibold))
+          if harness.readsLimits {
+            Text(store.quota == nil ? "Reading limits…" : "Limit not read yet").font(.system(size: 20, weight: .semibold))
+          }
           QuotaUnavailable(harness: harness)
         }
       }
@@ -323,6 +328,7 @@ private struct CompactHarness: View {
   }
 
   private var status: (text: String, color: Color) {
+    guard harness.readsLimits else { return ("Usage only", .secondary) }
     guard let forecast = store.weekly(harness) else { return ("Not read yet", .secondary) }
     return forecast.isLive ? ("Live", BurnTheme.ahead) : ("Local snapshot", BurnTheme.ahead)
   }

@@ -49,6 +49,7 @@ version = "0.1.0"
 dependencies = [
  "ccusage-adapter-claude",
  "ccusage-adapter-codex",
+ "ccusage-adapter-gemini",
  "ccusage-core",
  "minreq",
  "serde",
@@ -115,6 +116,18 @@ version = "0.0.0"
 source = "git+https://github.com/ccusage/ccusage?rev=57e5658dcac4de42f50d059b62cddc1fec9bbdc9#57e5658dcac4de42f50d059b62cddc1fec9bbdc9"
 dependencies = [
  "ccusage-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ccusage-adapter-gemini"
+version = "0.0.0"
+source = "git+https://github.com/ccusage/ccusage?rev=57e5658dcac4de42f50d059b62cddc1fec9bbdc9#57e5658dcac4de42f50d059b62cddc1fec9bbdc9"
+dependencies = [
+ "ccusage-adapter-common",
+ "ccusage-core",
+ "jiff",
  "serde",
  "serde_json",
 ]
@@ -227,7 +240,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -481,7 +494,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -634,7 +647,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

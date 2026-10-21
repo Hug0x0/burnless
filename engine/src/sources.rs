@@ -17,6 +17,7 @@ use serde::Serialize;
 pub enum SourceId {
     Claude,
     Codex,
+    Gemini,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -130,6 +131,23 @@ pub fn codex() -> Resolved {
     Resolved {
         existing,
         searched,
+        env_override: env_value.is_some(),
+    }
+}
+
+/// Gemini CLI: `GEMINI_DATA_DIR` (comma separated) or `~/.gemini/tmp`, holding
+/// `<project>/chats/*.json(l)`. Like ccusage, overrides are used verbatim.
+pub fn gemini() -> Resolved {
+    let env_value = env::var("GEMINI_DATA_DIR").ok();
+    let candidates: Vec<PathBuf> = match env_value.as_deref() {
+        Some(value) => split_paths(value).map(PathBuf::from).collect(),
+        None => home()
+            .map(|home| vec![home.join(".gemini").join("tmp")])
+            .unwrap_or_default(),
+    };
+    Resolved {
+        existing: candidates.iter().filter(|path| path.is_dir()).cloned().collect(),
+        searched: candidates,
         env_override: env_value.is_some(),
     }
 }

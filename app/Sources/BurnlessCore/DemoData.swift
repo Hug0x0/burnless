@@ -11,6 +11,7 @@ public enum DemoData {
     let today = calendar.key(now)
     let claudeModels = ["demo-claude-opus", "demo-claude-sonnet", "demo-claude-haiku"]
     let codexModels = ["demo-gpt-large", "demo-gpt-mini"]
+    let geminiModels = ["demo-gemini-pro", "demo-gemini-flash"]
     for offset in stride(from: -119, through: 0, by: 1) {
       guard let key = calendar.adding(days: offset, to: today) else { continue }
       let weekday = calendar.calendar.component(.weekday, from: calendar.date(key) ?? now)
@@ -52,6 +53,23 @@ public enum DemoData {
             costBreakdown: CostBreakdown(
               input: Double(input) * rate / 1_000_000, output: Double(output) * rate * 8 / 1_000_000,
               cacheRead: Double(cacheRead) * rate * 0.1 / 1_000_000)))
+      }
+      for (index, model) in geminiModels.enumerated()
+      where Double.random(in: 0...1, using: &generator) < [0.4, 0.5][index] {
+        let input = UInt64(Double.random(in: 100_000...900_000, using: &generator) * scale)
+        let cacheRead = UInt64(Double(input) * Double.random(in: 1...4, using: &generator))
+        let output = UInt64(Double.random(in: 10_000...80_000, using: &generator) * scale)
+        let rate = [1.25, 0.3][index]
+        let cost =
+          (Double(input) * rate + Double(cacheRead) * rate * 0.25 + Double(output) * rate * 8)
+          / 1_000_000
+        rows.append(
+          UsageRow(
+            source: .gemini, date: key, model: model, inputTokens: input, outputTokens: output,
+            cacheReadTokens: cacheRead, reasoningTokens: output / 2, costUSD: cost,
+            costBreakdown: CostBreakdown(
+              input: Double(input) * rate / 1_000_000, output: Double(output) * rate * 8 / 1_000_000,
+              cacheRead: Double(cacheRead) * rate * 0.25 / 1_000_000)))
       }
     }
     // One unpriced model so partial-estimate states are visible in demos.

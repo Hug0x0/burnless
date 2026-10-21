@@ -6,6 +6,8 @@ public struct EngineConfiguration: Sendable, Equatable {
   public var claudeDirectory: String?
   /// Overrides `CODEX_HOME` for the engine process when set.
   public var codexHome: String?
+  /// Overrides `GEMINI_DATA_DIR` (the folder holding `<project>/chats/`) when set.
+  public var geminiDirectory: String?
   /// Also fetch current public LiteLLM prices (no usage data is sent).
   public var onlinePricing: Bool
   public var timeZone: TimeZone
@@ -13,11 +15,12 @@ public struct EngineConfiguration: Sendable, Equatable {
 
   public init(
     executable: URL, claudeDirectory: String? = nil, codexHome: String? = nil,
-    onlinePricing: Bool = false, timeZone: TimeZone = .current, timeout: TimeInterval = 120
+    geminiDirectory: String? = nil, onlinePricing: Bool = false, timeZone: TimeZone = .current, timeout: TimeInterval = 120
   ) {
     self.executable = executable
     self.claudeDirectory = claudeDirectory
     self.codexHome = codexHome
+    self.geminiDirectory = geminiDirectory
     self.onlinePricing = onlinePricing
     self.timeZone = timeZone
     self.timeout = timeout
@@ -34,7 +37,10 @@ public struct EngineConfiguration: Sendable, Equatable {
 
   public func environment(base: [String: String]) -> [String: String] {
     var environment = base
-    for (key, value) in [("CLAUDE_CONFIG_DIR", claudeDirectory), ("CODEX_HOME", codexHome)] {
+    for (key, value) in [
+      ("CLAUDE_CONFIG_DIR", claudeDirectory), ("CODEX_HOME", codexHome),
+      ("GEMINI_DATA_DIR", geminiDirectory),
+    ] {
       if let value, !value.trimmingCharacters(in: .whitespaces).isEmpty {
         environment[key] = value
       }

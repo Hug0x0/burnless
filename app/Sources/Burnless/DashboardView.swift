@@ -50,6 +50,7 @@ struct DashboardView: View {
       if let days = store.quota?.codex.limitUsageDaily, days.contains(where: { $0.usedPercent > 0 }) {
         CodexLimitUsageChart(days: days).burnCard()
       }
+    case .gemini: HarnessQuotaCard(harness: .gemini)
     case nil: EmptyView()
     }
   }
@@ -71,7 +72,7 @@ struct DashboardView: View {
   }
 
   private var subtitle: String {
-    guard let harness else { return store.period.label + " · usage from your Claude Code and Codex logs" }
+    guard let harness else { return store.period.label + " · usage from your Claude Code, Codex and Gemini CLI logs" }
     return [store.plan(for: harness).name, store.period.label, "usage from your logs"].compactMap { $0 }
       .joined(separator: " · ")
   }
@@ -102,10 +103,15 @@ struct DashboardView: View {
           , kind: .warning)
       }
     }
-    if dashboard.harness == nil, dashboard.unavailable.count == 1, let source = dashboard.unavailable.first,
-      dashboard.hasAnyHistory
-    {
-      Notice(message: "\(source.name): \(availabilityText(store.snapshot?.availability(source))). Totals include \(Harness.allCases.first { $0 != source }!.name) only.")
+    // Gemini CLI is optional: a Mac without its history is not worth a warning.
+    let missing = dashboard.unavailable.filter {
+      !($0 == .gemini && store.snapshot?.availability($0) == .notFound)
+    }
+    if dashboard.harness == nil, !missing.isEmpty, dashboard.hasAnyHistory {
+      let included = dashboard.scope.filter { !dashboard.unavailable.contains($0) }.map(\.name)
+      ForEach(missing, id: \.self) { source in
+        Notice(message: "\(source.name): \(availabilityText(store.snapshot?.availability(source))). Totals include \(included.formatted(.list(type: .and))) only.")
+      }
     }
   }
 
@@ -119,7 +125,7 @@ struct DashboardView: View {
     } description: {
       Text(
         store.isLoading || !store.didLoad
-          ? "Burnless is reading your Claude Code and Codex logs on this Mac."
+          ? "Burnless is reading your Claude Code, Codex and Gemini CLI logs on this Mac."
           : "Check the source folders in Settings, then refresh.")
     }
     .frame(maxWidth: .infinity, minHeight: 420)
@@ -263,7 +269,7 @@ private struct TokenPopover: View {
       }
       if tokens.reasoning > 0 {
         GridRow {
-          Text("of which reasoning (Codex)").foregroundStyle(.secondary)
+          Text("of which reasoning (Codex, Gemini)").foregroundStyle(.secondary)
           Text(Format.fullTokens(tokens.reasoning)).foregroundStyle(.secondary)
         }
       }

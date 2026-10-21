@@ -207,6 +207,23 @@ func reading(
     #expect(PlanCatalog.codex(planType: "prolite").label == "Pro Lite · price unknown")
   }
 
+  @Test func resolvesGeminiPlansOnlyFromSettings() {
+    #expect(PlanCatalog.apply("plus", to: SubscriptionPlan(), harness: .gemini).label == "Google AI Plus · $4.99/mo")
+    #expect(PlanCatalog.apply("Google AI Pro", to: SubscriptionPlan(), harness: .gemini).pricePerMonth == 19.99)
+    #expect(PlanCatalog.apply("ultra", to: SubscriptionPlan(), harness: .gemini).isOverride)
+    // An unknown name does not invent a plan; a price still works.
+    #expect(PlanCatalog.apply("team", to: SubscriptionPlan(), harness: .gemini).name == nil)
+    #expect(PlanCatalog.apply("10", to: SubscriptionPlan(), harness: .gemini).pricePerMonth == 10)
+    #expect(!Harness.gemini.readsLimits)
+  }
+
+  @Test func passesTheGeminiFolderToTheEngine() {
+    let configuration = EngineConfiguration(
+      executable: URL(fileURLWithPath: "/bin/true"), geminiDirectory: "/tmp/gemini")
+    #expect(configuration.environment(base: [:])["GEMINI_DATA_DIR"] == "/tmp/gemini")
+    #expect(EngineConfiguration(executable: URL(fileURLWithPath: "/bin/true")).environment(base: [:])["GEMINI_DATA_DIR"] == nil)
+  }
+
   @Test func appliesOverrides() {
     let lite = PlanCatalog.codex(planType: "prolite")
     let priced = PlanCatalog.apply("$100", to: lite, harness: .codex)

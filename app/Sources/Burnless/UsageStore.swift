@@ -42,6 +42,7 @@ enum Appearance: String, CaseIterable, Identifiable {
   var appearance: Appearance { didSet { save(appearance.rawValue, "appearance"); appearance.apply() } }
   var claudeDirectory: String { didSet { save(claudeDirectory, "claudeDirectory") } }
   var codexHome: String { didSet { save(codexHome, "codexHome") } }
+  var geminiDirectory: String { didSet { save(geminiDirectory, "geminiDirectory") } }
   var onlinePricing: Bool { didSet { save(onlinePricing, "onlinePricing") } }
   /// Minutes between automatic usage refreshes while the app is open; 0 disables.
   var refreshMinutes: Int { didSet { save(refreshMinutes, "refreshMinutes") } }
@@ -50,6 +51,8 @@ enum Appearance: String, CaseIterable, Identifiable {
   /// Plan overrides: a monthly price or a plan name. Empty uses the detected plan.
   var claudePlan: String { didSet { save(claudePlan, "claudePlan") } }
   var codexPlan: String { didSet { save(codexPlan, "codexPlan") } }
+  /// Gemini CLI logs no plan, so this is the only source of its plan.
+  var geminiPlan: String { didSet { save(geminiPlan, "geminiPlan") } }
   var showInMenuBar: Bool { didSet { save(showInMenuBar, "showInMenuBar") } }
   var menuBarOnly: Bool { didSet { save(menuBarOnly, "menuBarOnly"); applyActivationPolicy() } }
   /// Harness whose weekly remaining is shown in the menu bar and toolbar.
@@ -62,14 +65,18 @@ enum Appearance: String, CaseIterable, Identifiable {
     appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
     claudeDirectory = defaults.string(forKey: "claudeDirectory") ?? ""
     codexHome = defaults.string(forKey: "codexHome") ?? ""
+    geminiDirectory = defaults.string(forKey: "geminiDirectory") ?? ""
     onlinePricing = defaults.bool(forKey: "onlinePricing")
     refreshMinutes = defaults.object(forKey: "refreshMinutes") as? Int ?? 5
     liveQuotas = defaults.bool(forKey: "liveQuotas")
     claudePlan = defaults.string(forKey: "claudePlan") ?? ""
     codexPlan = defaults.string(forKey: "codexPlan") ?? ""
+    geminiPlan = defaults.string(forKey: "geminiPlan") ?? ""
     showInMenuBar = defaults.object(forKey: "showInMenuBar") as? Bool ?? true
     menuBarOnly = defaults.bool(forKey: "menuBarOnly")
-    menuBarQuota = Harness(rawValue: defaults.string(forKey: "menuBarQuota") ?? "") ?? .codex
+    menuBarQuota =
+      Harness(rawValue: defaults.string(forKey: "menuBarQuota") ?? "").flatMap { $0.readsLimits ? $0 : nil }
+      ?? .codex
     quotaChartRange =
       QuotaChartRange(rawValue: defaults.string(forKey: "quotaChartRange") ?? "") ?? .untilReset
     checkForUpdates = defaults.bool(forKey: "checkForUpdates")
@@ -83,6 +90,7 @@ enum Appearance: String, CaseIterable, Identifiable {
 
   var engineClaudeDirectory: String? { claudeDirectory.isEmpty ? nil : claudeDirectory }
   var engineCodexHome: String? { codexHome.isEmpty ? nil : codexHome }
+  var engineGeminiDirectory: String? { geminiDirectory.isEmpty ? nil : geminiDirectory }
 }
 
 /// Cross-process pacing for live Claude reads, shared with the background
@@ -244,7 +252,8 @@ enum LivePacing {
     guard let executable = EngineClient.locate() else { return nil }
     return EngineConfiguration(
       executable: executable, claudeDirectory: settings.engineClaudeDirectory,
-      codexHome: settings.engineCodexHome, onlinePricing: settings.onlinePricing,
+      codexHome: settings.engineCodexHome, geminiDirectory: settings.engineGeminiDirectory,
+      onlinePricing: settings.onlinePricing,
       timeZone: .current)
   }
 
@@ -339,6 +348,8 @@ enum LivePacing {
     case .codex:
       PlanCatalog.apply(
         settings.codexPlan, to: PlanCatalog.codex(planType: quota?.codex.planType), harness: .codex)
+    case .gemini:
+      PlanCatalog.apply(settings.geminiPlan, to: SubscriptionPlan(), harness: .gemini)
     }
   }
 
@@ -357,7 +368,11 @@ enum LivePacing {
 
   /// Weekly limit window of a harness.
   func weekly(_ harness: Harness) -> Forecast? {
-    forecast(harness == .claude ? .claudeWeekly : .codexWeekly)
+    switch harness {
+    case .claude: forecast(.claudeWeekly)
+    case .codex: forecast(.codexWeekly)
+    case .gemini: nil
+    }
   }
 
   /// Weekly remaining for badges, including a full limit after a reset.

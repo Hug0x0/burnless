@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 license = "MIT"
-description = "Reads local Claude Code and Codex usage through ccusage and prints a versioned JSON report for Burnless."
+description = "Reads local Claude Code, Codex and Gemini CLI usage through ccusage and prints a versioned JSON report for Burnless."
 
 [[bin]]
 name = "burnless-engine"
@@ -16,6 +16,7 @@ path = "src/main.rs"
 ccusage-core = { git = "https://github.com/ccusage/ccusage", rev = "57e5658dcac4de42f50d059b62cddc1fec9bbdc9" }
 ccusage-adapter-claude = { git = "https://github.com/ccusage/ccusage", rev = "57e5658dcac4de42f50d059b62cddc1fec9bbdc9" }
 ccusage-adapter-codex = { git = "https://github.com/ccusage/ccusage", rev = "57e5658dcac4de42f50d059b62cddc1fec9bbdc9" }
+ccusage-adapter-gemini = { git = "https://github.com/ccusage/ccusage", rev = "57e5658dcac4de42f50d059b62cddc1fec9bbdc9" }
 # HTTPS client for the opt-in price refresh (same client ccusage's binary uses).
 minreq = { version = "3.0.0", default-features = false, features = ["https-rustls"] }
 serde = { version = "1", features = ["derive"] }

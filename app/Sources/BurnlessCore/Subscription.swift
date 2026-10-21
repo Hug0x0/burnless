@@ -5,7 +5,8 @@ import Foundation
 public struct SubscriptionPlan: Equatable, Sendable {
   public var name: String?
   public var pricePerMonth: Double?
-  /// Raw identifier from local files (Claude tier or Codex plan type).
+  /// Raw identifier from local files (Claude tier or Codex plan type), or
+  /// the name typed in Settings (Gemini, which logs no plan).
   public var detected: String?
   /// The price comes from the user's override rather than the catalog.
   public var isOverride: Bool
@@ -53,8 +54,20 @@ public enum PlanCatalog {
     }
   }
 
-  /// Applies a user override: a monthly price (`200`, `$20`) or, for
-  /// Claude, a known plan name (`max-20x`, `pro`).
+  /// Google AI plans that include Gemini CLI. Gemini CLI writes no plan to
+  /// disk, so this only resolves a name entered in Settings.
+  public static func gemini(plan: String?) -> SubscriptionPlan {
+    guard let plan, !plan.isEmpty else { return SubscriptionPlan() }
+    switch normalized(plan).replacingOccurrences(of: "googleai", with: "").replacingOccurrences(of: "gemini", with: "") {
+    case "plus": return SubscriptionPlan(name: "Google AI Plus", pricePerMonth: 4.99)
+    case "pro": return SubscriptionPlan(name: "Google AI Pro", pricePerMonth: 19.99)
+    case "ultra": return SubscriptionPlan(name: "Google AI Ultra", pricePerMonth: 249.99)
+    default: return SubscriptionPlan()
+    }
+  }
+
+  /// Applies a user override: a monthly price (`200`, `$20`) or a known plan
+  /// name (`max-20x`, `pro`, `plus`).
   public static func apply(_ override: String, to plan: SubscriptionPlan, harness: Harness)
     -> SubscriptionPlan
   {
@@ -64,7 +77,12 @@ public enum PlanCatalog {
       return SubscriptionPlan(
         name: plan.name, pricePerMonth: price, detected: plan.detected, isOverride: true)
     }
-    var named = harness == .claude ? claude(tier: text) : codex(planType: text)
+    var named =
+      switch harness {
+      case .claude: claude(tier: text)
+      case .codex: codex(planType: text)
+      case .gemini: gemini(plan: text)
+      }
     if named.pricePerMonth == nil, harness == .claude {
       switch normalized(text) {
       case "max", "max5": named = claude(tier: "5x")

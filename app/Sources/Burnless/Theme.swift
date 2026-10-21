@@ -42,11 +42,12 @@ enum BurnTheme {
     remaining < 15 ? behind : remaining < 35 ? .orange : .green
   }
 
-  /// Stable series colors, as in Agent Burn: Claude orange, Codex green.
+  /// Stable series colors, as in Agent Burn: Claude orange, Codex green; Gemini indigo.
   static func color(for harness: Harness) -> Color {
     switch harness {
     case .claude: .orange
     case .codex: .green
+    case .gemini: .indigo
     }
   }
 
@@ -54,6 +55,7 @@ enum BurnTheme {
     switch harness {
     case .claude: "sparkle"
     case .codex: "chevron.left.forwardslash.chevron.right"
+    case .gemini: "sparkles"
     }
   }
 

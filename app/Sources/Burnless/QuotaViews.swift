@@ -79,7 +79,7 @@ struct QuotaUnavailable: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(store.quota == nil ? "Reading limits…" : "Limit not available yet")
+      Text(!harness.readsLimits ? "No limit reading" : store.quota == nil ? "Reading limits…" : "Limit not available yet")
         .font(.system(size: 15, weight: .semibold))
       Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -98,6 +98,8 @@ struct QuotaUnavailable: View {
       return store.settings.liveQuotas
         ? "Sign in to Claude Code, then check again."
         : "Claude Code saves its limits when it checks them (for example with /usage). Or turn on live limits in Settings → Quotas."
+    case .gemini:
+      return "Gemini CLI does not save its limits on this Mac, so Burnless shows its usage and plan value only. Run /stats in Gemini CLI to see the remaining quota."
     }
   }
 }

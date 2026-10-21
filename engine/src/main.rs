@@ -1,4 +1,4 @@
-//! burnless-engine: reads local Claude Code and Codex history with ccusage and
+//! burnless-engine: reads local Claude Code, Codex and Gemini CLI history with ccusage and
 //! prints one versioned JSON report on stdout.
 //!
 //! Usage: burnless-engine report [--timezone <IANA>] [--online-pricing]
@@ -143,6 +143,7 @@ fn run_report(options: &Options) -> Report {
     let shared = shared_args(options);
     let mut claude = status(SourceId::Claude, &sources::claude(), "CLAUDE_CONFIG_DIR");
     let mut codex = status(SourceId::Codex, &sources::codex(), "CODEX_HOME");
+    let mut gemini = status(SourceId::Gemini, &sources::gemini(), "GEMINI_DATA_DIR");
 
     let pricing = PricingMap::load_with_overrides(shared.offline, false, std::iter::empty());
     let mut rows = guarded(&mut claude, || {
@@ -155,6 +156,13 @@ fn run_report(options: &Options) -> Report {
         let groups = ccusage_adapter_codex::load_groups(&shared, AgentReportKind::Daily)
             .map_err(|error| error.to_string())?;
         Ok(report::codex_rows(&groups, &pricing, speed))
+    }));
+    rows.extend(guarded(&mut gemini, || {
+        let entries = ccusage_adapter_gemini::load_entries(&shared, &pricing)
+            .map_err(|error| error.to_string())?;
+        let daily = ccusage_adapter_gemini::summarize_entries(&entries, AgentReportKind::Daily)
+            .map_err(|error| error.to_string())?;
+        Ok(report::gemini_rows(&daily, &pricing))
     }));
     let codex_images = if codex.state == SourceState::Ok {
         let since = utc_now()
@@ -186,7 +194,7 @@ fn run_report(options: &Options) -> Report {
             online: options.online_pricing,
             online_fetched: pricing_fetch::litellm_fetched(),
         },
-        sources: vec![claude, codex],
+        sources: vec![claude, codex, gemini],
         rows,
         codex_images,
     }

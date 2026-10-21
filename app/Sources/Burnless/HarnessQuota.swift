@@ -239,6 +239,7 @@ struct HarnessQuotaCard: View {
       if weekly == nil && session == nil {
         Rectangle().fill(BurnTheme.line).frame(height: 1)
         QuotaUnavailable(harness: harness)
+          .frame(minHeight: harness.readsLimits ? 90 : nil)
       } else {
         Rectangle().fill(BurnTheme.line).frame(height: 1)
         let weeklySeries: QuotaSeries = harness == .claude ? .claudeWeekly : .codexWeekly
@@ -272,6 +273,7 @@ struct HarnessQuotaCard: View {
   }
 
   private var status: (text: String, color: Color) {
+    guard harness.readsLimits else { return ("Usage only", .secondary) }
     if store.quotaError != nil { return ("Needs attention", .orange) }
     guard let forecast = store.weekly(harness) ?? store.forecast(.claudeSession) else { return ("Not read yet", .secondary) }
     return forecast.isLive ? ("Live", BurnTheme.ahead) : ("Local snapshot", BurnTheme.color(for: harness))

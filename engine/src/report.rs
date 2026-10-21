@@ -9,7 +9,10 @@
 //! - `totalTokens`: exactly the sum of the four fields above.
 //!
 //! Claude Code reports input excluding cache; Codex reports input including
-//! cached input, so ccusage's `non_cached_input_tokens` normalizes it.
+//! cached input, so ccusage's `non_cached_input_tokens` normalizes it. Gemini
+//! CLI input is already split from cached input by ccusage's adapter, and its
+//! thinking tokens are billed as output, so they join `outputTokens` and are
+//! also reported as `reasoningTokens`.
 
 use std::collections::BTreeMap;
 
@@ -37,7 +40,7 @@ pub struct Row {
     pub output_tokens: u64,
     pub cache_write_tokens: u64,
     pub cache_read_tokens: u64,
-    /// Informational subset of `outputTokens` (Codex only).
+    /// Informational subset of `outputTokens` (Codex and Gemini).
     pub reasoning_tokens: u64,
     pub total_tokens: u64,
     /// Known API-equivalent cost. When `missingPricing` is true this is only
@@ -176,16 +179,31 @@ impl Row {
 /// a model contribute to the day but to no breakdown; that remainder becomes
 /// an unattributed row so the day total is never lost.
 pub fn claude_rows(summaries: &[UsageSummary], pricing: Option<&PricingMap>) -> Vec<Row> {
+    summary_rows(SourceId::Claude, summaries, pricing)
+}
+
+/// Gemini daily summaries have the same shape as Claude's. Their thinking
+/// tokens arrive as `extra_total_tokens` and are counted as output.
+pub fn gemini_rows(summaries: &[UsageSummary], pricing: &PricingMap) -> Vec<Row> {
+    summary_rows(SourceId::Gemini, summaries, Some(pricing))
+}
+
+fn summary_rows(
+    source: SourceId,
+    summaries: &[UsageSummary],
+    pricing: Option<&PricingMap>,
+) -> Vec<Row> {
     let mut rows = Vec::new();
     for summary in summaries {
         let Some(date) = summary.date.as_deref() else {
             continue;
         };
-        let mut attributed = Row::new(SourceId::Claude, date, None);
+        let mut attributed = Row::new(source, date, None);
         for breakdown in &summary.model_breakdowns {
-            let mut row = Row::new(SourceId::Claude, date, Some(breakdown.model_name.clone()));
+            let mut row = Row::new(source, date, Some(breakdown.model_name.clone()));
             row.input_tokens = breakdown.input_tokens;
-            row.output_tokens = breakdown.output_tokens;
+            row.output_tokens = breakdown.output_tokens + breakdown.extra_total_tokens;
+            row.reasoning_tokens = breakdown.extra_total_tokens;
             row.cache_write_tokens = breakdown.cache_creation_tokens;
             row.cache_read_tokens = breakdown.cache_read_tokens;
             row.cost_usd = breakdown.cost;
@@ -197,6 +215,7 @@ pub fn claude_rows(summaries: &[UsageSummary], pricing: Option<&PricingMap>) -> 
             row.cost_breakdown = CostBreakdown::split(row.cost_usd, row.tokens(), rates);
             attributed.input_tokens += row.input_tokens;
             attributed.output_tokens += row.output_tokens;
+            attributed.reasoning_tokens += row.reasoning_tokens;
             attributed.cache_write_tokens += row.cache_write_tokens;
             attributed.cache_read_tokens += row.cache_read_tokens;
             attributed.cost_usd += row.cost_usd;
@@ -204,9 +223,13 @@ pub fn claude_rows(summaries: &[UsageSummary], pricing: Option<&PricingMap>) -> 
                 rows.push(row);
             }
         }
-        let mut rest = Row::new(SourceId::Claude, date, None);
+        let mut rest = Row::new(source, date, None);
         rest.input_tokens = summary.input_tokens.saturating_sub(attributed.input_tokens);
-        rest.output_tokens = summary.output_tokens.saturating_sub(attributed.output_tokens);
+        rest.reasoning_tokens = summary
+            .extra_total_tokens
+            .saturating_sub(attributed.reasoning_tokens);
+        rest.output_tokens = (summary.output_tokens + summary.extra_total_tokens)
+            .saturating_sub(attributed.output_tokens);
         rest.cache_write_tokens = summary
             .cache_creation_tokens
             .saturating_sub(attributed.cache_write_tokens);
@@ -352,6 +375,22 @@ mod tests {
         assert!((split.input - 1.0).abs() < 1e-9);
         assert!((split.output - 2.0).abs() < 1e-9);
         assert_eq!(CostBreakdown::split(0.0, [1, 2, 3, 4], None), CostBreakdown::default());
+    }
+
+    #[test]
+    fn gemini_thinking_tokens_count_as_output_and_reasoning() {
+        let mut day = summary("2026-03-01", 100, 20, 1.0);
+        day.extra_total_tokens = 30;
+        day.model_breakdowns = vec![ModelBreakdown {
+            extra_total_tokens: 30,
+            ..breakdown("gemini-3-pro-preview", 100, 20, 1.0, false)
+        }];
+        let rows = summary_rows(SourceId::Gemini, &[day], None);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].source, SourceId::Gemini);
+        assert_eq!(rows[0].output_tokens, 50);
+        assert_eq!(rows[0].reasoning_tokens, 30);
+        assert_eq!(rows[0].total_tokens, 150);
     }
 
     #[test]
