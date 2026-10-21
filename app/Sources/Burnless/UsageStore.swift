@@ -375,9 +375,11 @@ enum LivePacing {
     }
   }
 
-  /// Weekly remaining for badges, including a full limit after a reset.
+  /// Weekly remaining for badges. `nil` once the window has reset without a
+  /// newer reading: usage since then is unknown, so it is not shown as 100%.
   func remaining(_ harness: Harness) -> Double? {
-    weekly(harness)?.remaining(at: clock)
+    guard let weekly = weekly(harness), !weekly.hasReset(at: clock) else { return nil }
+    return weekly.remaining
   }
 
   func samples(_ series: QuotaSeries, range: QuotaChartRange) -> [QuotaSample] {

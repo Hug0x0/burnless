@@ -320,6 +320,10 @@ private struct PlanRow: View {
           Text(harness.name)
           Text(plan.label + (plan.detected.map { " · detected \($0)" } ?? ""))
             .font(.caption).foregroundStyle(.secondary)
+          if let ignored = plan.ignoredOverride {
+            Text("“\(ignored)” is not a known plan or price, so it is ignored.")
+              .font(.caption).foregroundStyle(BurnTheme.warning)
+          }
         }
       }
     }

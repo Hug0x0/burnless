@@ -39,7 +39,7 @@ real usage.
 - **Gemini CLI**: usage only (spend, tokens, models, daily chart). Gemini CLI keeps no
   limit reading on disk, so there is no quota chart; run `/stats` in Gemini CLI for that.
 - **Plans**: detected from `~/.claude.json` (Claude rate-limit tier) and Codex's logs
-  (plan type), with monthly prices for known plans (Pro, Max 5×, Max 20×, Plus, Pro).
+  (plan type), with monthly prices for known plans (Pro, Max 5×, Max 20×, Plus, Pro 5× at $100, Pro).
   Unknown prices stay unknown; set one in Settings → Quotas. Gemini CLI logs no plan:
   enter `plus`, `pro` or `ultra` (Google AI Plus $4.99, Pro $19.99, Ultra $249.99) or a price.
 - **Subscription economics**: last 30 days at API prices vs. the plan price (value
@@ -230,8 +230,7 @@ between the two runs.
   usage in the Gemini app or Antigravity is not in Gemini CLI's logs and is not counted.
 - Without live limits, Claude's meters are only as recent as Claude Code's own last check.
   Codex's daily breakdown by surface and model needs live limits.
-- Plan prices are a built-in table; Codex Pro Lite and team plans have no price until
-  you set one. Image generations use a $0.15 per image estimate, outside spend totals.
+- Plan prices are a built-in table; team plans have no price until you set one. Image generations use a $0.15 per image estimate, outside spend totals.
 - Estimates depend on the pricing snapshot. New models may show as unpriced until the
   snapshot is updated or *Fetch current prices* is enabled.
 - History deleted from disk can't be reconstructed. The cache only keeps data for a

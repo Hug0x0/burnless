@@ -79,7 +79,8 @@ struct SubscriptionsCard: View {
         }
         ShareBar(value: remaining / 100, tint: BurnTheme.tone(remaining: remaining), height: 5)
       } else {
-        Text("Weekly limit not read yet").font(.system(size: 12)).foregroundStyle(.secondary)
+        Text(weekly == nil ? "Weekly limit not read yet" : "No reading since the weekly reset")
+          .font(.system(size: 12)).foregroundStyle(.secondary)
       }
     }
     .padding(14)

@@ -10,15 +10,21 @@ public struct SubscriptionPlan: Equatable, Sendable {
   public var detected: String?
   /// The price comes from the user's override rather than the catalog.
   public var isOverride: Bool
+  /// Override text that matched no plan and no price, so it was not applied.
+  public var ignoredOverride: String?
 
-  public init(name: String? = nil, pricePerMonth: Double? = nil, detected: String? = nil, isOverride: Bool = false) {
+  public init(
+    name: String? = nil, pricePerMonth: Double? = nil, detected: String? = nil, isOverride: Bool = false,
+    ignoredOverride: String? = nil
+  ) {
     self.name = name
     self.pricePerMonth = pricePerMonth
     self.detected = detected
     self.isOverride = isOverride
+    self.ignoredOverride = ignoredOverride
   }
 
-  /// "Max 20× · $200/mo", "Pro Lite · price unknown", "Plan not detected".
+  /// "Max 20× · $200/mo", "Team · price unknown", "Plan not detected".
   public var label: String {
     switch (name, pricePerMonth) {
     case (let name?, let price?): "\(name) · \(Format.currency(price, wholeDollars: true))/mo"
@@ -49,7 +55,8 @@ public enum PlanCatalog {
     switch normalized(planType) {
     case "plus": return SubscriptionPlan(name: "Plus", pricePerMonth: 20, detected: planType)
     case "pro": return SubscriptionPlan(name: "Pro", pricePerMonth: 200, detected: planType)
-    case "prolite": return SubscriptionPlan(name: "Pro Lite", detected: planType)
+    // `prolite` is the $100 Pro tier (5× Plus on Codex), launched April 2026.
+    case "prolite": return SubscriptionPlan(name: "Pro 5×", pricePerMonth: 100, detected: planType)
     default: return SubscriptionPlan(name: readable(planType), detected: planType)
     }
   }
@@ -67,7 +74,8 @@ public enum PlanCatalog {
   }
 
   /// Applies a user override: a monthly price (`200`, `$20`) or a known plan
-  /// name (`max-20x`, `pro`, `plus`).
+  /// name (`max-20x`, `pro`, `plus`). Any other text keeps the detected plan
+  /// and is reported in `ignoredOverride`, so a typo never hides it.
   public static func apply(_ override: String, to plan: SubscriptionPlan, harness: Harness)
     -> SubscriptionPlan
   {
@@ -90,7 +98,16 @@ public enum PlanCatalog {
       default: break
       }
     }
-    guard named.name != nil else { return plan }
+    let known =
+      switch harness {
+      case .claude, .gemini: named.pricePerMonth != nil
+      case .codex: ["plus", "pro", "prolite"].contains(normalized(text))
+      }
+    guard known else {
+      var kept = plan
+      kept.ignoredOverride = text
+      return kept
+    }
     named.detected = plan.detected
     named.isOverride = true
     return named

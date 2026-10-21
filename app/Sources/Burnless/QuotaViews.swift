@@ -104,6 +104,37 @@ struct QuotaUnavailable: View {
   }
 }
 
+/// A window whose reset has passed with no newer reading: what was used
+/// since is unknown, so no remaining share is claimed.
+struct NoReadingSinceReset: View {
+  @Environment(UsageStore.self) private var store
+  let harness: Harness
+  let reset: Date
+  var compact = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("No reading since the reset")
+        .font(.system(size: compact ? 20 : 22, weight: .semibold))
+      Text("The limit reset \(reset.formatted(.relative(presentation: .named))). \(hint)")
+        .font(.system(size: compact ? 13 : 12))
+        .foregroundStyle(compact ? BurnTheme.quotaMuted : BurnTheme.muted)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var hint: String {
+    if store.settings.liveQuotas { return "Waiting for the next live reading." }
+    return switch harness {
+    case .claude:
+      "Claude Code saves a new reading when it checks its limits (for example with /usage), or turn on live limits in Settings → Quotas."
+    case .codex: "Codex logs a new reading with your next request, or turn on live limits in Settings → Quotas."
+    case .gemini: ""
+    }
+  }
+}
+
 /// Model-scoped limits and extra usage: title, detail, a thin bar and the value.
 struct ClaudeMeterRow: View {
   let title: String

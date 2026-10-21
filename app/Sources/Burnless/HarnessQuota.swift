@@ -133,10 +133,7 @@ struct QuotaHero: View {
               .font(.system(size: 11)).foregroundStyle(BurnTheme.muted)
           }
           if forecast.hasReset(at: now) {
-            RemainingHeadline(remaining: 100)
-            Text("The limit reset \(forecast.reset.formatted(.relative(presentation: .named))). A new window starts with your next request.")
-              .font(.system(size: 12)).foregroundStyle(BurnTheme.muted)
-              .fixedSize(horizontal: false, vertical: true)
+            NoReadingSinceReset(harness: harness, reset: forecast.reset)
           } else {
             RemainingHeadline(remaining: forecast.remaining)
             QuotaOutlookLabel(outlook: .make(forecast))
@@ -227,7 +224,9 @@ struct HarnessQuotaCard: View {
         SpendMetric(title: "Total spend", value: Format.spend(value.apiEquivalent), detail: "Past 30 days · API-equivalent")
         SpendMetric(
           title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0) } ?? "Unknown",
-          detail: plan.name.map { $0 + (plan.isOverride ? " · set in Settings" : "") } ?? "Not detected")
+          detail: plan.ignoredOverride != nil
+            ? "Override not recognized · see Settings"
+            : plan.name.map { $0 + (plan.isOverride ? " · set in Settings" : "") } ?? "Not detected")
         SpendMetric(title: "Subscription value", value: value.valueMultiple.map(Format.multiple) ?? "—", detail: "Usage / monthly price")
         Spacer(minLength: 0)
         VStack(alignment: .trailing, spacing: 10) {

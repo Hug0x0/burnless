@@ -204,7 +204,8 @@ func reading(
   @Test func mapsCodexPlansWithoutInventingPrices() {
     #expect(PlanCatalog.codex(planType: "plus").pricePerMonth == 20)
     #expect(PlanCatalog.codex(planType: "pro").pricePerMonth == 200)
-    #expect(PlanCatalog.codex(planType: "prolite").label == "Pro Lite · price unknown")
+    #expect(PlanCatalog.codex(planType: "prolite").label == "Pro 5× · $100/mo")
+    #expect(PlanCatalog.codex(planType: "team").label == "Team · price unknown")
   }
 
   @Test func resolvesGeminiPlansOnlyFromSettings() {
@@ -226,13 +227,25 @@ func reading(
 
   @Test func appliesOverrides() {
     let lite = PlanCatalog.codex(planType: "prolite")
-    let priced = PlanCatalog.apply("$100", to: lite, harness: .codex)
-    #expect(priced.name == "Pro Lite")
-    #expect(priced.pricePerMonth == 100)
+    let priced = PlanCatalog.apply("$90", to: lite, harness: .codex)
+    #expect(priced.name == "Pro 5×")
+    #expect(priced.pricePerMonth == 90)
     #expect(priced.isOverride)
     #expect(PlanCatalog.apply("max-20x", to: SubscriptionPlan(), harness: .claude).pricePerMonth == 200)
     #expect(PlanCatalog.apply("  ", to: lite, harness: .codex) == lite)
-    #expect(PlanCatalog.apply("-5", to: lite, harness: .codex).pricePerMonth == nil)
+    #expect(PlanCatalog.apply("-5", to: lite, harness: .codex).pricePerMonth == 100)
+  }
+
+  @Test func anUnknownOverrideKeepsTheDetectedPlan() {
+    let max = PlanCatalog.claude(tier: "default_claude_max_20x")
+    let typo = PlanCatalog.apply("h", to: max, harness: .claude)
+    #expect(typo.name == "Max 20×")
+    #expect(typo.pricePerMonth == 200)
+    #expect(!typo.isOverride)
+    #expect(typo.ignoredOverride == "h")
+    #expect(PlanCatalog.apply("pro", to: max, harness: .claude).ignoredOverride == nil)
+    #expect(PlanCatalog.apply("prolite", to: SubscriptionPlan(), harness: .codex).name == "Pro 5×")
+    #expect(PlanCatalog.apply("-5", to: max, harness: .claude).ignoredOverride == "-5")
   }
 }
 

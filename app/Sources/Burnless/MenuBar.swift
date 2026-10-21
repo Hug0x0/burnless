@@ -300,11 +300,10 @@ private struct CompactHarness: View {
         let series: QuotaSeries = harness == .claude ? .claudeWeekly : .codexWeekly
         let samples = store.samples(series, range: .untilReset)
         VStack(alignment: .leading, spacing: 16) {
-          RemainingHeadline(remaining: forecast.remaining(at: now), title: "Weekly limit")
           if forecast.hasReset(at: now) {
-            Text("The limit reset. A new window starts with your next request.")
-              .font(.system(size: 13)).foregroundStyle(BurnTheme.quotaMuted)
+            NoReadingSinceReset(harness: harness, reset: forecast.reset, compact: true)
           } else {
+            RemainingHeadline(remaining: forecast.remaining, title: "Weekly limit")
             QuotaOutlookLabel(outlook: .make(forecast), compact: true)
             QuotaChartView(
               forecast: forecast, samples: samples, color: BurnTheme.color(for: harness),
