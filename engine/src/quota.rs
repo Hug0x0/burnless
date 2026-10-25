@@ -586,7 +586,7 @@ fn codex_quota(live: bool) -> CodexQuota {
         })
         .collect::<Vec<_>>();
     let first = fetch_codex(CODEX_USAGE_URL, &token);
-    let mut state = first.as_ref().err().copied();
+    let first_error = first.as_ref().err().copied();
     let observed_at_ms = utc_now().as_millis();
     let mut live_plan = None;
     let live_snapshot = others
@@ -602,9 +602,13 @@ fn codex_quota(live: bool) -> CodexQuota {
             live_plan = plan;
             heal_overcount(snapshot, logs_snapshot.as_ref(), observed_at_ms)
         });
-    if live_snapshot.is_none() && state.is_none() {
-        state = Some(LiveState::Failed);
-    }
+    // Any read that returned meters makes the live read a success; otherwise
+    // the first read's error says why.
+    let state = if live_snapshot.is_some() {
+        LiveState::Ok
+    } else {
+        first_error.unwrap_or(LiveState::Failed)
+    };
     let limit_usage_daily = daily
         .join()
         .ok()
@@ -627,7 +631,7 @@ fn codex_quota(live: bool) -> CodexQuota {
         plan_type,
         snapshot,
         limit_usage_daily,
-        live: LiveStatus::of(state.unwrap_or(LiveState::Ok)),
+        live: LiveStatus::of(state),
     }
 }
 
