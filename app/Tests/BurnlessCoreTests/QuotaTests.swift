@@ -242,6 +242,10 @@ func reading(
     #expect(priced.pricePerMonth == 90)
     #expect(priced.isOverride)
     #expect(PlanCatalog.apply("max-20x", to: SubscriptionPlan(), harness: .claude).pricePerMonth == 200)
+    for typed in ["max20", "Max 20", "max_20"] {
+      #expect(PlanCatalog.apply(typed, to: SubscriptionPlan(), harness: .claude).pricePerMonth == 200)
+    }
+    #expect(PlanCatalog.apply("Max 5", to: SubscriptionPlan(), harness: .claude).name == "Max 5×")
     #expect(PlanCatalog.apply("  ", to: lite, harness: .codex) == lite)
     #expect(PlanCatalog.apply("-5", to: lite, harness: .codex).pricePerMonth == 100)
   }

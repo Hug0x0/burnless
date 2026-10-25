@@ -39,10 +39,11 @@ public struct SubscriptionPlan: Equatable, Sendable {
 public enum PlanCatalog {
   public static func claude(tier: String?) -> SubscriptionPlan {
     guard let tier, !tier.isEmpty else { return SubscriptionPlan() }
-    let value = tier.lowercased()
+    // Normalized so typed names like "Max 20" or "max_20" match too.
+    let value = normalized(tier)
     let known: (String, Double)? =
-      value.contains("20x") ? ("Max 20×", 200)
-      : value.contains("5x") ? ("Max 5×", 100)
+      value.contains("20x") || value.contains("max20") ? ("Max 20×", 200)
+      : value.contains("5x") || value.contains("max5") ? ("Max 5×", 100)
       : value.contains("max") ? ("Max", 100)
       : value.contains("pro") ? ("Pro", 20)
       : nil
@@ -91,13 +92,6 @@ public enum PlanCatalog {
       case .codex: codex(planType: text)
       case .gemini: gemini(plan: text)
       }
-    if named.pricePerMonth == nil, harness == .claude {
-      switch normalized(text) {
-      case "max", "max5": named = claude(tier: "5x")
-      case "max20": named = claude(tier: "20x")
-      default: break
-      }
-    }
     let known =
       switch harness {
       case .claude, .gemini: named.pricePerMonth != nil
