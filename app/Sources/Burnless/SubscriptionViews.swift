@@ -170,7 +170,9 @@ struct SubscriptionDetailsCard: View {
       detail("Full quota value", Format.currency(estimate.fullQuotaValue))
       detail("Average $ / %", Format.currency(estimate.dollarsPerPercent) + " / %")
       detail("Monthly quota value", Format.currency(estimate.monthlyValue))
-      detail("Projected quota use", QuotaText.percent(estimate.projectedUsePercent.rounded()))
+      if let projected = estimate.projectedUsePercent {
+        detail("Projected quota use", QuotaText.percent(projected.rounded()))
+      }
       if let multiple = estimate.valueMultiple { detail("Quota value / plan price", Format.multiple(multiple)) }
       Text("Extrapolated from this window's API-equivalent spend and the share of the limit it used.")
         .font(.system(size: 11)).foregroundStyle(.secondary)

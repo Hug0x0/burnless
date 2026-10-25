@@ -338,11 +338,12 @@ public struct Forecast: Equatable, Sendable {
   /// Remaining once a reset has passed: a new window starts full.
   public func remaining(at now: Date) -> Double { hasReset(at: now) ? 100 : remaining }
 
-  /// Usage at reset if the observed pace continues. None in the first 3% of
-  /// a window (at least 15 minutes): 1% two minutes after a reset is not a
-  /// pace worth projecting.
+  /// Usage at reset if the observed pace continues. A small reading in the
+  /// first 3% of a window (at least 15 minutes) is not projected: 1% two
+  /// minutes after a reset is noise. A heavy start (10% or more) still is.
   public var projectedUse: Double? {
-    guard usedPercent > 0, elapsed * duration >= max(900, duration * 0.03) else { return nil }
+    guard usedPercent > 0, elapsed > 0 else { return nil }
+    guard usedPercent >= 10 || elapsed * duration >= max(900, duration * 0.03) else { return nil }
     return usedPercent / elapsed
   }
   public var daysEarly: Double {

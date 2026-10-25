@@ -84,6 +84,10 @@ func reading(
       reading: reading("2026-10-13T00:02:00Z", used: 1, reset: "2026-10-20T00:00:00Z"))
     #expect(early.projectedUse == nil)
     #expect(!early.runsOut)
+    // A heavy start is still a pace to warn about.
+    let burst = Forecast(
+      reading: reading("2026-10-13T04:00:00Z", used: 40, reset: "2026-10-20T00:00:00Z"))
+    #expect(burst.runsOut)
   }
 
   @Test func suggestedPaceCountsTheDaysLeftFromNow() {

@@ -21,7 +21,7 @@ struct QuotaOutlook: Equatable {
     guard forecast.projectedUse != nil else {
       return QuotaOutlook(
         tone: .good, headline: "Room to keep building",
-        detail: "A forecast appears once this window has a few hours of usage.")
+        detail: "A forecast appears once this window has more usage recorded.")
     }
     if forecast.runsOut {
       let early = QuotaText.duration(forecast.reset.timeIntervalSince(forecast.projectedEnd))

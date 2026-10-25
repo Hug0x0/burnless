@@ -180,8 +180,9 @@ public struct QuotaValueEstimate: Equatable, Sendable {
   public var cycleTokens: UInt64
   public var fullQuotaValue: Double
   public var monthlyValue: Double
-  /// Usage at reset at the current pace, capped at 999%.
-  public var projectedUsePercent: Double
+  /// Usage at reset at the current pace, capped at 999%; none while the
+  /// forecast makes no projection.
+  public var projectedUsePercent: Double?
   public var valueMultiple: Double?
   /// API-equivalent dollars per percent of the limit.
   public var dollarsPerPercent: Double
@@ -198,7 +199,7 @@ public struct QuotaValueEstimate: Equatable, Sendable {
     return QuotaValueEstimate(
       cycleSpend: cycleSpend, cycleTokens: cycleTokens, fullQuotaValue: full,
       monthlyValue: monthly,
-      projectedUsePercent: min(999, forecast.usedPercent / forecast.elapsed),
+      projectedUsePercent: forecast.projectedUse.map { min(999, $0) },
       valueMultiple: price.flatMap { $0 > 0 ? monthly / $0 : nil },
       dollarsPerPercent: cycleSpend / forecast.usedPercent,
       tokensPerPercent: cycleTokens > 0 ? Double(cycleTokens) / forecast.usedPercent : nil,
