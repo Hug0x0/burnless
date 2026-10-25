@@ -483,9 +483,9 @@ fn claude_token() -> Option<ClaudeToken> {
     }
     let mut dirs = claude_config_dirs();
     dirs.extend(home().map(|home| home.join(".claude")));
-    dirs.iter()
-        .find_map(|dir| fs::read_to_string(dir.join(".credentials.json")).ok())
-        .and_then(|text| claude_token_from(&text))
+    dirs.iter().find_map(|dir| {
+        claude_token_from(&fs::read_to_string(dir.join(".credentials.json")).ok()?)
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -869,11 +869,23 @@ fn latest_logged_codex() -> Option<(CodexSnapshot, Option<String>, Option<i64>)>
         .filter_map(|file| Some((fs::metadata(&file).ok()?.modified().ok()?, file)))
         .collect();
     files.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    files
-        .iter()
-        .take(CODEX_FILES_SCANNED)
-        .filter_map(|(_, file)| last_logged_codex(file))
-        .max_by_key(|(_, _, observed_at_ms)| observed_at_ms.unwrap_or(i64::MIN))
+    let mut best: Option<(CodexSnapshot, Option<String>, Option<i64>)> = None;
+    for (modified, file) in files.iter().take(CODEX_FILES_SCANNED) {
+        let best_ms = best.as_ref().and_then(|(_, _, at)| *at);
+        // A file last written before the best meter cannot hold a newer one.
+        let modified_ms = modified
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_millis() as i64);
+        if best_ms.is_some_and(|best_ms| modified_ms < best_ms) {
+            break;
+        }
+        if let Some(found) = last_logged_codex(file)
+            && (best.is_none() || found.2.unwrap_or(i64::MIN) > best_ms.unwrap_or(i64::MIN))
+        {
+            best = Some(found);
+        }
+    }
+    best
 }
 
 /// The last account meter in one session file. Reads a growing tail, so a
