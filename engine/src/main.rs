@@ -22,7 +22,7 @@ use std::{
 };
 
 use ccusage_core::{
-    PricingMap, format_date, utc_now,
+    PricingMap, format_date, parse_tz, utc_now,
     cli::{AgentReportKind, CodexSpeed, CostMode, SharedArgs},
 };
 use serde::Serialize;
@@ -77,7 +77,13 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Options
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--timezone" => {
-                options.timezone = Some(args.next().ok_or("--timezone needs a value")?);
+                let timezone = args.next().ok_or("--timezone needs a value")?;
+                // ccusage silently falls back to the system zone for an
+                // unknown name, while the report would still claim it.
+                if timezone != "local" && parse_tz(Some(&timezone)).is_none() {
+                    return Err(format!("unknown timezone: {timezone}"));
+                }
+                options.timezone = Some(timezone);
             }
             "--online-pricing" => options.online_pricing = true,
             "--live-claude" => options.quota.live_claude = true,

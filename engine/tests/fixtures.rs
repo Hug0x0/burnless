@@ -274,6 +274,17 @@ fn repeated_runs_are_identical_apart_from_timestamp() {
 }
 
 #[test]
+fn an_unknown_timezone_is_refused() {
+    let output = Command::new(env!("CARGO_BIN_EXE_burnless-engine"))
+        .args(["report", "--timezone", "Bogus/Zone"])
+        .env_clear()
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown timezone"));
+}
+
+#[test]
 fn dates_follow_the_requested_timezone() {
     let fixture = Fixture::new();
     // 23:30 UTC on March 10 is already March 11 in Paris (UTC+1 in winter)
