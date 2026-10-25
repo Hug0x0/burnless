@@ -421,15 +421,9 @@ public struct QuotaHistory: Codable, Equatable, Sendable {
     }
   }
 
-  /// The newest reading safe to show. A weekly reading far above the lowest
-  /// one of the last half hour is an unconfirmed provider over-count.
-  public func current(_ series: QuotaSeries) -> QuotaReading? {
-    let list = all(series)
-    guard let newest = list.last else { return nil }
-    let recent = list.reversed().prefix { Self.isRecent($0, to: newest) }
-    guard let floor = recent.map(\.usedPercent).min() else { return newest }
-    return recent.first { !Self.isOverCount($0, floor: floor) } ?? newest
-  }
+  /// The newest reading safe to show: the last consistent one, so neither an
+  /// unconfirmed over-count nor a replay of a superseded window.
+  public func current(_ series: QuotaSeries) -> QuotaReading? { consistent(series).last }
 
   private static func isRecent(_ reading: QuotaReading, to newest: QuotaReading) -> Bool {
     newest.observedAt.timeIntervalSince(reading.observedAt) <= 1800
@@ -475,13 +469,16 @@ public struct QuotaHistory: Codable, Equatable, Sendable {
     return chronological
   }
 
-  public func samples(_ series: QuotaSeries) -> [QuotaSample] {
-    consistent(series).map { QuotaSample(date: $0.observedAt, remaining: $0.remaining) }
+  public func samples(_ series: QuotaSeries) -> [QuotaSample] { Self.samples(consistent(series)) }
+
+  public static func samples(_ points: [QuotaReading]) -> [QuotaSample] {
+    points.map { QuotaSample(date: $0.observedAt, remaining: $0.remaining) }
   }
 
-  /// Jumps in remaining between consecutive readings.
-  public func resets(_ series: QuotaSeries) -> [QuotaReset] {
-    let points = consistent(series)
+  public func resets(_ series: QuotaSeries) -> [QuotaReset] { Self.resets(consistent(series)) }
+
+  /// Jumps in remaining between consecutive consistent readings.
+  public static func resets(_ points: [QuotaReading]) -> [QuotaReset] {
     var found: [QuotaReset] = []
     for (previous, reading) in zip(points, points.dropFirst())
     where reading.remaining > previous.remaining + 1 {

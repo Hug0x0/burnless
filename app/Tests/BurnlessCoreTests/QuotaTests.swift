@@ -182,6 +182,7 @@ func reading(
     history.record(reading("2026-10-20T01:00:00Z", used: 2, reset: "2026-10-27T00:00:00Z"), series: .codexWeekly)
     history.record(reading("2026-10-20T01:01:00Z", used: 81, reset: "2026-10-20T00:00:00Z"), series: .codexWeekly)
     #expect(history.consistent(.codexWeekly).map(\.usedPercent) == [80, 2])
+    #expect(history.current(.codexWeekly)?.usedPercent == 2)
   }
 
   @Test func fileCommitsMergeAndKeepABackup() throws {

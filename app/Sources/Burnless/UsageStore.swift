@@ -143,7 +143,12 @@ enum LivePacing {
   private(set) var didLoad = false
 
   private(set) var quota: QuotaReport?
-  private(set) var quotaHistory = QuotaHistory()
+  private(set) var quotaHistory = QuotaHistory() {
+    didSet { consistentReadings = Dictionary(uniqueKeysWithValues: QuotaSeries.allCases.map { ($0, quotaHistory.consistent($0)) }) }
+  }
+  /// `quotaHistory.consistent` per series, computed once per change rather
+  /// than on every render.
+  private var consistentReadings: [QuotaSeries: [QuotaReading]] = [:]
   private(set) var quotaCheckedAt: Date?
   private(set) var quotaError: String?
   private(set) var isCheckingQuotas = false
@@ -354,14 +359,16 @@ enum LivePacing {
   }
 
   /// The newest trustworthy reading of a meter: the history's current one,
-  /// or this poll's when the history could not be written.
+  /// or this poll's when the history could not be written. A poll that was
+  /// saved goes through the history's filters like any other reading.
   func reading(_ series: QuotaSeries) -> QuotaReading? {
-    let stored = quotaHistory.current(series)
-    let fresh = quota?.readings[series]
-    switch (stored, fresh) {
-    case (let stored?, let fresh?): return fresh.observedAt > stored.observedAt ? fresh : stored
-    case (let stored, let fresh): return stored ?? fresh
+    let stored = consistentReadings[series]?.last
+    if let fresh = quota?.readings[series], fresh.isValid,
+      fresh.observedAt > (quotaHistory.latest(series)?.observedAt ?? .distantPast)
+    {
+      return fresh
     }
+    return stored
   }
 
   func forecast(_ series: QuotaSeries) -> Forecast? { reading(series).map(Forecast.init(reading:)) }
@@ -388,10 +395,10 @@ enum LivePacing {
   func samples(_ series: QuotaSeries, range: QuotaChartRange) -> [QuotaSample] {
     guard let forecast = forecast(series) else { return [] }
     return QuotaChart.samples(
-      quotaHistory.samples(series), range: range, forecast: forecast, now: clock)
+      QuotaHistory.samples(consistentReadings[series] ?? []), range: range, forecast: forecast, now: clock)
   }
 
-  func resets(_ series: QuotaSeries) -> [QuotaReset] { quotaHistory.resets(series) }
+  func resets(_ series: QuotaSeries) -> [QuotaReset] { QuotaHistory.resets(consistentReadings[series] ?? []) }
 
   /// Start of the current weekly window, for the Reset to date period.
   func resetStart(for harness: Harness?) -> Date? {
