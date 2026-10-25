@@ -44,7 +44,7 @@ struct Report {
     pricing: PricingInfo,
     sources: Vec<SourceStatus>,
     rows: Vec<Row>,
-    /// Codex image generations per session day over the last 30 days.
+    /// Codex image generations per day over the last 30 days.
     codex_images: Vec<images::ImageDay>,
 }
 
@@ -169,7 +169,7 @@ fn run_report(options: &Options) -> Report {
             .checked_sub_millis(30 * 86_400_000)
             .unwrap_or_else(utc_now);
         let since = format_date(since, options.timezone.as_deref());
-        catch_unwind(|| images::codex_image_days(&since)).unwrap_or_default()
+        catch_unwind(|| images::codex_image_days(&since, options.timezone.as_deref())).unwrap_or_default()
     } else {
         Vec::new()
     };

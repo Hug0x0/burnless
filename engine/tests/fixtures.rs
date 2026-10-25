@@ -526,6 +526,29 @@ fn codex_image_generations_are_counted_once_per_image() {
 }
 
 #[test]
+fn compressed_sessions_and_long_running_ones_are_read() {
+    let fixture = Fixture::new();
+    let today = Command::new("date").arg("-u").arg("+%Y-%m-%d").output().unwrap();
+    let today = String::from_utf8(today.stdout).unwrap().trim().to_string();
+    // A session started months ago that generated an image today.
+    fixture.write(
+        ".codex/sessions/2026/05/05/rollout-2026-05-05T18-30-40-old.jsonl",
+        &[json!({"timestamp": format!("{today}T08:00:00.000Z"), "type": "response_item",
+            "payload": {"type": "image_generation_call", "id": "ig_late", "result": "AAAA"}})
+        .to_string()],
+    );
+    // A compressed session holding the latest meter.
+    let path = fixture.path(".codex/sessions/2026/10/17/rollout-2026-10-17T09-00-00-z.jsonl.zst");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let line = codex_rate_limits("2026-10-17T09:00:00.000Z", 33.0, "plus") + "\n";
+    fs::write(&path, zstd::encode_all(line.as_bytes(), 3).unwrap()).unwrap();
+
+    assert_eq!(fixture.quota()["codex"]["snapshot"]["weekly"]["usedPercent"], 33.0);
+    let report = fixture.run("UTC");
+    assert_eq!(report["codexImages"], json!([{"date": today, "count": 1}]));
+}
+
+#[test]
 fn row_cost_breakdown_adds_up_to_the_row_cost() {
     let fixture = Fixture::new();
     fixture.write(

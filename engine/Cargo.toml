@@ -21,6 +21,8 @@ ccusage-adapter-gemini = { git = "https://github.com/ccusage/ccusage", rev = "57
 minreq = { version = "3.0.0", default-features = false, features = ["https-rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Codex compresses older sessions to .jsonl.zst (same crate ccusage uses).
+zstd = { version = "0.14.2", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

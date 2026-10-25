@@ -788,7 +788,7 @@ fn short_of(windows: &[Option<Window>]) -> Option<Window> {
         .copied()
 }
 
-fn collect_jsonl(dir: &Path, files: &mut Vec<PathBuf>) {
+fn collect_sessions(dir: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -796,23 +796,49 @@ fn collect_jsonl(dir: &Path, files: &mut Vec<PathBuf>) {
         let path = entry.path();
         let Ok(kind) = entry.file_type() else { continue };
         if kind.is_dir() {
-            collect_jsonl(&path, files);
-        } else if path.extension().is_some_and(|ext| ext == "jsonl") {
+            collect_sessions(&path, files);
+        } else if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".jsonl") || name.ends_with(".jsonl.zst"))
+        {
             files.push(path);
         }
     }
 }
 
-/// Every plain session file in the configured Codex folders.
+/// Every session file in the configured Codex folders, plain or compressed
+/// (`.jsonl.zst`, as Codex stores older sessions). Where both copies exist
+/// the plain one is kept, as Codex and ccusage do.
 pub(crate) fn codex_session_files() -> Vec<PathBuf> {
     let mut files = Vec::new();
     for dir in sources::codex().existing {
-        collect_jsonl(&dir, &mut files);
+        collect_sessions(&dir, &mut files);
     }
+    let plain: std::collections::HashSet<PathBuf> =
+        files.iter().filter(|file| !is_compressed(file)).cloned().collect();
+    files.retain(|file| !is_compressed(file) || !plain.contains(&file.with_extension("")));
     // Names start with the session's start time, so this is chronological
     // across homes.
     files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
     files
+}
+
+fn is_compressed(file: &Path) -> bool {
+    file.extension().is_some_and(|ext| ext == "zst")
+}
+
+/// A whole session file as text, decompressing `.jsonl.zst`.
+pub(crate) fn read_session(file: &Path) -> Option<String> {
+    if !is_compressed(file) {
+        return fs::read_to_string(file).ok();
+    }
+    let mut text = String::new();
+    zstd::stream::read::Decoder::new(fs::File::open(file).ok()?)
+        .ok()?
+        .read_to_string(&mut text)
+        .ok()?;
+    Some(text)
 }
 
 /// The newest *account* meter logged by Codex: `(snapshot, plan, logged at)`.
@@ -837,6 +863,9 @@ fn latest_logged_codex() -> Option<(CodexSnapshot, Option<String>, Option<i64>)>
 /// The last account meter in one session file. Reads a growing tail, so a
 /// long line after the meter (a tool output, an image) does not hide it.
 fn last_logged_codex(file: &Path) -> Option<(CodexSnapshot, Option<String>, Option<i64>)> {
+    if is_compressed(file) {
+        return read_session(file)?.lines().rev().find_map(logged_codex_line);
+    }
     let len = fs::metadata(file).ok()?.len();
     let mut bytes = CODEX_TAIL_BYTES;
     loop {
