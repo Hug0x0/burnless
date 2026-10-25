@@ -105,7 +105,8 @@ struct DashboardView: View {
     }
     let missing = dashboard.unavailable
     if dashboard.harness == nil, !missing.isEmpty, dashboard.hasAnyHistory {
-      let included = dashboard.scope.filter { !dashboard.unavailable.contains($0) }.map(\.name)
+      let included = dashboard.harnesses.filter { $0.availability.hasData && !missing.contains($0.harness) }
+        .map(\.harness.name)
       ForEach(missing, id: \.self) { source in
         Notice(message: "\(source.name): \(availabilityText(store.snapshot?.availability(source))). Totals include \(included.formatted(.list(type: .and))) only.")
       }

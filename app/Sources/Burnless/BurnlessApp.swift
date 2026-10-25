@@ -37,6 +37,7 @@ struct BurnlessApp: App {
       store.period = period
     }
     _store = State(initialValue: store)
+    _showInMenuBar = AppStorage(wrappedValue: true, "showInMenuBar", store: store.settings.defaults)
     // Started here rather than from a window, so menu-bar-only mode and the
     // menu bar extra work without the dashboard open.
     Task { @MainActor in store.start() }

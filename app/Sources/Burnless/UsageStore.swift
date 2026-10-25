@@ -37,7 +37,9 @@ enum Appearance: String, CaseIterable, Identifiable {
 
 /// User preferences, persisted in UserDefaults (domain `io.github.hug0x0.burnless`).
 @Observable @MainActor final class AppSettings {
-  private let defaults: UserDefaults
+  /// Standard defaults, or the demo's own domain.
+  let defaults: UserDefaults
+  @ObservationIgnored private var observer: NSObjectProtocol?
 
   var appearance: Appearance { didSet { save(appearance.rawValue, "appearance"); appearance.apply() } }
   var claudeDirectory: String { didSet { save(claudeDirectory, "claudeDirectory") } }
@@ -91,6 +93,17 @@ enum Appearance: String, CaseIterable, Identifiable {
     quotaChartRange =
       QuotaChartRange(rawValue: defaults.string(forKey: "quotaChartRange") ?? "") ?? .untilReset
     checkForUpdates = defaults.bool(forKey: "checkForUpdates")
+    // The menu bar extra writes showInMenuBar itself when its icon is
+    // ⌘-dragged out; follow it so the settings toggle stays in step.
+    observer = NotificationCenter.default.addObserver(
+      forName: UserDefaults.didChangeNotification, object: defaults, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        let value = self.defaults.object(forKey: "showInMenuBar") as? Bool ?? true
+        if value != self.showInMenuBar { self.showInMenuBar = value }
+      }
+    }
   }
 
   func applyActivationPolicy() {
