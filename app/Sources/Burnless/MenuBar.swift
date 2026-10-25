@@ -19,7 +19,7 @@ struct MenuBarLabel: View {
 }
 
 enum PopoverTab: String, CaseIterable, Identifiable {
-  case general, codex, claude, gemini
+  case general, claude, codex, gemini
   var id: String { rawValue }
   var label: String {
     switch self {
@@ -293,13 +293,14 @@ private struct CompactHarness: View {
           Text(plan.name ?? "Subscription").font(.system(size: 14)).foregroundStyle(BurnTheme.quotaMuted)
         }
         Spacer()
+        let status = store.quotaStatus(harness)
         StatusBadge(text: status.text, color: status.color)
       }
       HStack(alignment: .top, spacing: 16) {
         PopoverMetric(title: "Total spend", value: Format.spend(value.apiEquivalent), detail: "Past 30 days · API-equivalent")
         PopoverMetric(
           title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0) } ?? "Unknown",
-          detail: plan.name ?? "Not detected")
+          detail: store.planDetail(harness))
       }
       if let forecast = store.weekly(harness) {
         let series: QuotaSeries = harness == .claude ? .claudeWeekly : .codexWeekly
@@ -330,12 +331,6 @@ private struct CompactHarness: View {
         }
       }
     }
-  }
-
-  private var status: (text: String, color: Color) {
-    guard harness.readsLimits else { return ("Usage only", .secondary) }
-    guard let forecast = store.weekly(harness) else { return ("Not read yet", .secondary) }
-    return forecast.isLive ? ("Live", BurnTheme.ahead) : ("Local snapshot", BurnTheme.ahead)
   }
 
   @ViewBuilder private func details(forecast: Forecast, now: Date) -> some View {

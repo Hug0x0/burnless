@@ -88,7 +88,7 @@ struct QuotaUnavailable: View {
   }
 
   private var message: String {
-    if let error = store.quotaError { return error }
+    if harness.readsLimits, let error = store.quotaError { return error }
     switch harness {
     case .codex:
       return store.settings.liveQuotas

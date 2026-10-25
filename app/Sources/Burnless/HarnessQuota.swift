@@ -225,14 +225,15 @@ struct HarnessQuotaCard: View {
         SpendMetric(title: "Total spend", value: Format.spend(value.apiEquivalent), detail: "Past 30 days · API-equivalent")
         SpendMetric(
           title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0) } ?? "Unknown",
-          detail: plan.ignoredOverride != nil
-            ? "Override not recognized · see Settings"
-            : plan.name.map { $0 + (plan.isOverride ? " · set in Settings" : "") } ?? "Not detected")
+          detail: store.planDetail(harness))
         SpendMetric(title: "Subscription value", value: value.valueMultiple.map(Format.multiple) ?? "—", detail: "Usage / monthly price")
         Spacer(minLength: 0)
         VStack(alignment: .trailing, spacing: 10) {
+          let status = store.quotaStatus(harness)
           StatusBadge(text: status.text, color: status.color)
-          QuotaCheckButton(label: true).font(.system(size: 12)).foregroundStyle(BurnTheme.muted)
+          if harness.readsLimits {
+            QuotaCheckButton(label: true).font(.system(size: 12)).foregroundStyle(BurnTheme.muted)
+          }
         }
       }
       if let notice = liveNotice { Notice(message: notice, kind: .warning) }
@@ -270,13 +271,6 @@ struct HarnessQuotaCard: View {
 
   private var divider: some View {
     Rectangle().fill(BurnTheme.line).frame(width: 1).frame(maxHeight: .infinity)
-  }
-
-  private var status: (text: String, color: Color) {
-    guard harness.readsLimits else { return ("Usage only", .secondary) }
-    if store.quotaError != nil { return ("Needs attention", .orange) }
-    guard let forecast = store.weekly(harness) ?? store.forecast(.claudeSession) else { return ("Not read yet", .secondary) }
-    return forecast.isLive ? ("Live", BurnTheme.ahead) : ("Local snapshot", BurnTheme.color(for: harness))
   }
 
   @ViewBuilder private func secondary(now: Date) -> some View {
@@ -325,5 +319,23 @@ struct HarnessQuotaCard: View {
       return "Anthropic is rate limiting usage checks. Burnless retries later and shows the last saved meters."
     case .off, .ok, .failed: return nil
     }
+  }
+}
+
+extension UsageStore {
+  /// The line under the plan price, the same on the dashboard and in the menu.
+  func planDetail(_ harness: Harness) -> String {
+    let plan = plan(for: harness)
+    if plan.ignoredOverride != nil { return "Override not recognized · see Settings" }
+    return plan.name.map { $0 + (plan.isOverride ? " · set in Settings" : "") } ?? "Not detected"
+  }
+
+  /// Where a harness's limits come from, for its status badge.
+  func quotaStatus(_ harness: Harness) -> (text: String, color: Color) {
+    guard harness.readsLimits else { return ("Usage only", .secondary) }
+    if quotaError != nil { return ("Needs attention", .orange) }
+    let session = harness == .claude ? forecast(.claudeSession) : nil
+    guard let forecast = weekly(harness) ?? session else { return ("Not read yet", .secondary) }
+    return forecast.isLive ? ("Live", BurnTheme.ahead) : ("Local snapshot", BurnTheme.color(for: harness))
   }
 }
