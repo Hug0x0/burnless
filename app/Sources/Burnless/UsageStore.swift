@@ -111,11 +111,14 @@ enum LivePacing {
   private static let lastKey = "claudeLiveAt"
   private static let blockedKey = "claudeLiveBlockedUntil"
 
+  /// Whether a live read may go out now. A yes claims the minute at once,
+  /// before the request, so the other process sees it while it runs.
   static func claudeDue(now: Date = .now, force: Bool, defaults: UserDefaults = .standard) -> Bool {
     if let blocked = defaults.object(forKey: blockedKey) as? Date, blocked > now { return false }
-    guard !force else { return true }
     let last = defaults.object(forKey: lastKey) as? Date ?? .distantPast
-    return now.timeIntervalSince(last) >= interval
+    guard force || now.timeIntervalSince(last) >= interval else { return false }
+    defaults.set(now, forKey: lastKey)
+    return true
   }
 
   static func record(_ status: LiveStatus, now: Date = .now, defaults: UserDefaults = .standard) {
