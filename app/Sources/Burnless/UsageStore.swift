@@ -411,6 +411,14 @@ enum LivePacing {
 
   func resets(_ series: QuotaSeries) -> [QuotaReset] { QuotaHistory.resets(consistentReadings[series] ?? []) }
 
+  /// The period as it applies to a page: Reset to date names whose reset it
+  /// follows, or says it fell back to 7 days where there is none.
+  func periodLabel(for harness: Harness?) -> String {
+    guard period == .sinceReset else { return period.label }
+    guard resetStart(for: harness) != nil else { return "Last 7 days (no limit window)" }
+    return harness == nil ? "Since the \(settings.menuBarQuota.name) reset" : "Since the weekly reset"
+  }
+
   /// Start of the current weekly window, for the Reset to date period.
   func resetStart(for harness: Harness?) -> Date? {
     guard let forecast = weekly(harness ?? settings.menuBarQuota) else { return nil }

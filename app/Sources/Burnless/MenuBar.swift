@@ -216,7 +216,7 @@ private struct CompactOverview: View {
           .frame(maxWidth: .infinity, minHeight: 160)
       } else {
         HStack(alignment: .top, spacing: 16) {
-          PopoverMetric(title: "Total spend", value: Format.spend(dashboard.totals), detail: store.period.label + " · API-equivalent")
+          PopoverMetric(title: "Total spend", value: Format.spend(dashboard.totals), detail: store.periodLabel(for: nil) + " · API-equivalent")
           PopoverMetric(title: "Tokens", value: Format.tokens(dashboard.totals.tokens.total), detail: "Input, output and cache")
         }
         VStack(alignment: .leading, spacing: 14) {
