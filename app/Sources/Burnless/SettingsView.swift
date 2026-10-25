@@ -36,6 +36,9 @@ enum SettingsTab: String, Hashable {
 private struct GeneralSettings: View {
   @Environment(UsageStore.self) private var store
   @State private var loginItem = ServiceToggle.mainApp()
+  // The menu bar extra writes this key itself when its icon is ⌘-dragged
+  // out, so the toggle reads the key rather than a copy made at launch.
+  @AppStorage("showInMenuBar") private var showInMenuBar = true
 
   var body: some View {
     @Bindable var settings = store.settings
@@ -60,8 +63,11 @@ private struct GeneralSettings: View {
           .font(.caption).foregroundStyle(.secondary)
       }
       Section {
-        Toggle("Show in menu bar", isOn: $settings.showInMenuBar)
-          .onChange(of: settings.showInMenuBar) { settings.applyActivationPolicy() }
+        Toggle("Show in menu bar", isOn: $showInMenuBar)
+          .onChange(of: showInMenuBar, initial: true) {
+            if settings.showInMenuBar != showInMenuBar { settings.showInMenuBar = showInMenuBar }
+            settings.applyActivationPolicy()
+          }
         Toggle("Menu bar only", isOn: $settings.menuBarOnly).disabled(!settings.showInMenuBar)
         Picker("Show remaining", selection: $settings.menuBarQuota) {
           ForEach(Harness.allCases.filter(\.readsLimits)) { Text($0.name).tag($0) }
