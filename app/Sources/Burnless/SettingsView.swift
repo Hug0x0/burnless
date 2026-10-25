@@ -527,6 +527,8 @@ var appVersion: String {
 struct StatusPill: View {
   let availability: SourceAvailability?
   var label: String? = nil
+  /// Only the label and the colored dot; the state moves to the tooltip.
+  var compact = false
   var body: some View {
     let (text, color): (String, Color) =
       switch availability {
@@ -538,8 +540,10 @@ struct StatusPill: View {
       }
     HStack(spacing: 5) {
       Circle().fill(color).frame(width: 6, height: 6)
-      Text(label.map { "\($0) · \(text)" } ?? text).font(.system(size: 11, weight: .medium))
+      Text(compact ? label ?? text : label.map { "\($0) · \(text)" } ?? text).font(.system(size: 11, weight: .medium))
+        .lineLimit(1).fixedSize()
     }
+    .help(label.map { "\($0) · \(text)" } ?? text)
     .foregroundStyle(color)
     .padding(.horizontal, 8).padding(.vertical, 3)
     .background(color.opacity(0.1), in: Capsule())

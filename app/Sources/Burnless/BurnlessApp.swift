@@ -277,12 +277,15 @@ private struct StatusFooter: View {
         Text("Waiting for usage")
       }
       if !store.isDemo {
-        ForEach(Harness.allCases) { harness in
-          StatusPill(availability: store.snapshot?.availability(harness), label: harness.name)
+        // Names only when the window is too narrow for every state.
+        ViewThatFits(in: .horizontal) {
+          pills(compact: false)
+          pills(compact: true)
+          Color.clear.frame(width: 0, height: 0)
         }
         .padding(.leading, 6)
       }
-      Spacer()
+      Spacer(minLength: 8)
       Text("v" + appVersion).monospacedDigit().accessibilityLabel("App version")
       QuotaCheckButton()
       Button {
@@ -296,6 +299,14 @@ private struct StatusFooter: View {
       .accessibilityLabel("Refresh usage")
     }
     .font(.system(size: 11)).foregroundStyle(.secondary)
+  }
+
+  private func pills(compact: Bool) -> some View {
+    HStack(spacing: 8) {
+      ForEach(Harness.allCases) { harness in
+        StatusPill(availability: store.snapshot?.availability(harness), label: harness.name, compact: compact)
+      }
+    }
   }
 }
 

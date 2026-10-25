@@ -72,7 +72,7 @@ struct DashboardView: View {
   }
 
   private var subtitle: String {
-    guard let harness else { return store.periodLabel(for: nil) + " · usage from your Claude Code, Codex and Gemini CLI logs" }
+    guard let harness else { return store.periodLabel(for: nil) + " · usage from your local logs" }
     return [store.plan(for: harness).name, store.periodLabel(for: harness), "usage from your logs"].compactMap { $0 }
       .joined(separator: " · ")
   }
