@@ -60,6 +60,15 @@ enum Appearance: String, CaseIterable, Identifiable {
   var quotaChartRange: QuotaChartRange { didSet { save(quotaChartRange.rawValue, "quotaChartRange") } }
   var checkForUpdates: Bool { didSet { save(checkForUpdates, "checkForUpdates") } }
 
+  /// Demo mode starts from default settings in a domain of its own, so
+  /// screenshots carry no personal settings and changes never reach them.
+  static var demo: AppSettings {
+    let name = "io.github.hug0x0.burnless.demo"
+    let defaults = UserDefaults(suiteName: name) ?? .standard
+    defaults.removePersistentDomain(forName: name)
+    return AppSettings(defaults: defaults)
+  }
+
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system

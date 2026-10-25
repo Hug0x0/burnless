@@ -24,7 +24,7 @@ struct BurnlessApp: App {
     let arguments = ProcessInfo.processInfo.arguments
     let environment = ProcessInfo.processInfo.environment
     let demo = arguments.contains("--demo") || environment["BURNLESS_DEMO"] == "1"
-    let store = UsageStore(isDemo: demo)
+    let store = UsageStore(settings: demo ? .demo : AppSettings(), isDemo: demo)
     // Launch options for screenshots and checks. Environment variables, not
     // arguments: AppKit treats bare arguments as documents to open.
     switch environment["BURNLESS_ROUTE"] {
