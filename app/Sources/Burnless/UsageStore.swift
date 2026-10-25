@@ -409,8 +409,10 @@ enum LivePacing {
   /// Spend and blend rates over the current weekly window.
   func cycle(_ harness: Harness) -> (forecast: Forecast, estimate: QuotaValueEstimate?)? {
     guard let forecast = weekly(harness), !forecast.hasReset(at: clock) else { return nil }
+    // Spend after the reading did not count toward its percentage.
     let spend = SubscriptionMath.cycleSpend(
-      snapshot, harness: harness, since: forecast.start, now: clock, calendar: calendar)
+      snapshot, harness: harness, since: forecast.start, through: forecast.observedAt, now: clock,
+      calendar: calendar)
     let estimate = QuotaValueEstimate.make(
       cycleSpend: spend.cost, cycleTokens: spend.tokens, forecast: forecast,
       price: plan(for: harness).pricePerMonth)

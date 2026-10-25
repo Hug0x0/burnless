@@ -297,18 +297,28 @@ public enum SubscriptionMath {
 
   /// Spend and tokens since a window start, prorating the first day by the
   /// share of it the window covers (daily rows carry no time of day).
+  /// Spend from `start` through `end` (default `now`). A day row only partly
+  /// inside that span counts in proportion, as daily rows hold no times: the
+  /// first day of a window, and the reading's day when `end` is an older
+  /// reading, so spend after it is not set against its percentage.
   public static func cycleSpend(
-    _ snapshot: UsageSnapshot?, harness: Harness, since start: Date, now: Date, calendar: DayCalendar
+    _ snapshot: UsageSnapshot?, harness: Harness, since start: Date, through end: Date? = nil, now: Date,
+    calendar: DayCalendar
   ) -> (cost: Double, tokens: UInt64) {
+    let end = min(end ?? now, now)
     let firstKey = calendar.key(start)
-    let dayStart = calendar.calendar.startOfDay(for: start)
-    let dayEnd = calendar.calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
-    let span = dayEnd.timeIntervalSince(dayStart)
-    let fraction = span > 0 ? max(0, min(1, dayEnd.timeIntervalSince(start) / span)) : 1
+    let lastKey = calendar.key(end)
     var cost = 0.0
     var tokens = 0.0
-    for row in rows(snapshot, harness) where row.date >= firstKey && row.date <= calendar.key(now) {
-      let weight = row.date == firstKey ? fraction : 1
+    for row in rows(snapshot, harness) where row.date >= firstKey && row.date <= lastKey {
+      var weight = 1.0
+      if row.date == firstKey || row.date == lastKey, let dayStart = calendar.date(row.date) {
+        let dayEnd = calendar.calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+        // The row covers the day up to now when the day is today.
+        let covered = min(dayEnd, max(now, dayStart)).timeIntervalSince(dayStart)
+        let counted = min(end, dayEnd).timeIntervalSince(max(start, dayStart))
+        weight = covered > 0 ? max(0, min(1, counted / covered)) : 1
+      }
       cost += row.costUSD * weight
       tokens += Double(row.totalTokens) * weight
     }

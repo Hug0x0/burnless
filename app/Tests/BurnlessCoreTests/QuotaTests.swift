@@ -300,6 +300,18 @@ func reading(
     #expect(abs(cycle.cost - 16) < 1e-9)
   }
 
+  @Test func cycleSpendStopsAtAnOlderReading() {
+    let rows = [
+      row(.claude, "2026-10-13", "a", cost: 10), row(.claude, "2026-10-14", "a", cost: 10),
+      row(.claude, "2026-10-15", "a", cost: 10),
+    ]
+    // Read at 06:00 Paris on the 14th: a quarter of that day, none of the 15th.
+    let cycle = SubscriptionMath.cycleSpend(
+      snapshot(rows, now: now), harness: .claude, since: at("2026-10-13T00:00:00+02:00"),
+      through: at("2026-10-14T06:00:00+02:00"), now: now, calendar: paris)
+    #expect(abs(cycle.cost - 12.5) < 1e-9)
+  }
+
   @Test func quotaValueExtrapolatesTheWindow() throws {
     let forecast = Forecast(reading: reading("2026-10-16T12:00:00Z", used: 25, reset: "2026-10-20T00:00:00Z"))
     let estimate = try #require(
