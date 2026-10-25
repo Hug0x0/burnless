@@ -222,7 +222,7 @@ struct HarnessQuotaCard: View {
     let session = harness == .claude ? store.forecast(.claudeSession) : nil
     VStack(alignment: .leading, spacing: 24) {
       HStack(alignment: .top, spacing: 20) {
-        SpendMetric(title: "Total spend", value: Format.spend(value.apiEquivalent), detail: "Past 30 days · API-equivalent")
+        SpendMetric(title: "30-day spend", value: Format.spend(value.apiEquivalent), detail: "API-equivalent")
         SpendMetric(
           title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0) } ?? "Unknown",
           detail: store.planDetail(harness))
@@ -244,24 +244,38 @@ struct HarnessQuotaCard: View {
       } else {
         Rectangle().fill(BurnTheme.line).frame(height: 1)
         let weeklySeries: QuotaSeries = harness == .claude ? .claudeWeekly : .codexWeekly
+        // Side by side when the window is wide enough, stacked otherwise.
         if weekly != nil && session != nil {
-          // Two grid rows keep both charts on the same baseline.
-          Grid(alignment: .topLeading, horizontalSpacing: 28, verticalSpacing: 18) {
-            GridRow {
-              QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .details)
-              divider
-              QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .details)
+          ViewThatFits(in: .horizontal) {
+            // Two grid rows keep both charts on the same baseline.
+            Grid(alignment: .topLeading, horizontalSpacing: 28, verticalSpacing: 18) {
+              GridRow {
+                QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .details)
+                divider
+                QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .details)
+              }
+              GridRow(alignment: .bottom) {
+                QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .chart)
+                divider
+                QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .chart)
+              }
             }
-            GridRow(alignment: .bottom) {
-              QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true, part: .chart)
-              divider
-              QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true, part: .chart)
+            // ViewThatFits compares ideal widths; a chart's own is not useful.
+            .frame(minWidth: 0, idealWidth: 720, maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 24) {
+              QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness, stacked: true)
+              Rectangle().fill(BurnTheme.line).frame(height: 1)
+              QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false, stacked: true)
             }
           }
-        } else if weekly != nil {
-          QuotaHero(title: "Weekly limit", series: weeklySeries, harness: harness)
         } else {
-          QuotaHero(title: "5-hour session", series: .claudeSession, harness: harness, followsRange: false)
+          let title = weekly != nil ? "Weekly limit" : "5-hour session"
+          let series = weekly != nil ? weeklySeries : .claudeSession
+          ViewThatFits(in: .horizontal) {
+            QuotaHero(title: title, series: series, harness: harness, followsRange: weekly != nil)
+              .frame(minWidth: 0, idealWidth: 700, maxWidth: .infinity)
+            QuotaHero(title: title, series: series, harness: harness, followsRange: weekly != nil, stacked: true)
+          }
         }
       }
       secondary(now: now)

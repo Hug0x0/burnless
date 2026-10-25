@@ -297,7 +297,7 @@ private struct CompactHarness: View {
         StatusBadge(text: status.text, color: status.color)
       }
       HStack(alignment: .top, spacing: 16) {
-        PopoverMetric(title: "Total spend", value: Format.spend(value.apiEquivalent), detail: "Past 30 days · API-equivalent")
+        PopoverMetric(title: "30-day spend", value: Format.spend(value.apiEquivalent), detail: "API-equivalent")
         PopoverMetric(
           title: "Monthly plan", value: plan.pricePerMonth.map { Format.currency($0) } ?? "Unknown",
           detail: store.planDetail(harness))

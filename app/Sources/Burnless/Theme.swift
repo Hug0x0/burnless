@@ -312,7 +312,8 @@ struct PageHeader<Icon: View, Trailing: View>: View {
       VStack(alignment: .leading, spacing: 3) {
         Text(title).font(.system(size: 22, weight: .semibold)).lineLimit(1)
           .accessibilityAddTraits(.isHeader)
-        Text(subtitle).font(.system(size: 13)).foregroundStyle(BurnTheme.muted).lineLimit(1)
+        Text(subtitle).font(.system(size: 13)).foregroundStyle(BurnTheme.muted).lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
       }
       Spacer(minLength: 12)
       trailing
