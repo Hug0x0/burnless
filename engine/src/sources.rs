@@ -56,7 +56,7 @@ fn home() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
 }
 
-fn expand_home(raw: &str) -> PathBuf {
+pub(crate) fn expand_home(raw: &str) -> PathBuf {
     if let Some(rest) = raw.strip_prefix("~/")
         && let Some(home) = home()
     {

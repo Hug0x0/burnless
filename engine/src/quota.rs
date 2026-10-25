@@ -227,21 +227,30 @@ fn home() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
 }
 
-/// `.claude.json` sits in the config folder when `CLAUDE_CONFIG_DIR` is set,
-/// otherwise in the home folder.
-fn claude_account_files() -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    if let Ok(dirs) = env::var("CLAUDE_CONFIG_DIR") {
-        for raw in dirs.split(',').map(str::trim).filter(|dir| !dir.is_empty()) {
-            let dir = PathBuf::from(raw);
-            let dir = if dir.file_name().is_some_and(|name| name == "projects") {
+/// Folders named by `CLAUDE_CONFIG_DIR`, `~/` expanded as for usage logs.
+fn claude_config_dirs() -> Vec<PathBuf> {
+    let Ok(dirs) = env::var("CLAUDE_CONFIG_DIR") else {
+        return Vec::new();
+    };
+    dirs.split(',')
+        .map(str::trim)
+        .filter(|dir| !dir.is_empty())
+        .map(|raw| {
+            let dir = sources::expand_home(raw);
+            if dir.file_name().is_some_and(|name| name == "projects") {
                 dir.parent().map(Path::to_path_buf).unwrap_or(dir)
             } else {
                 dir
-            };
-            files.push(dir.join(".claude.json"));
-        }
-    }
+            }
+        })
+        .collect()
+}
+
+/// `.claude.json` sits in the config folder when `CLAUDE_CONFIG_DIR` is set,
+/// otherwise in the home folder.
+fn claude_account_files() -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> =
+        claude_config_dirs().iter().map(|dir| dir.join(".claude.json")).collect();
     if let Some(home) = home() {
         files.push(home.join(".claude.json"));
     }
@@ -472,8 +481,11 @@ fn claude_token() -> Option<ClaudeToken> {
     if let Some(token) = keychain_secret().as_deref().and_then(claude_token_from) {
         return Some(token);
     }
-    let path = home()?.join(".claude").join(".credentials.json");
-    claude_token_from(&fs::read_to_string(path).ok()?)
+    let mut dirs = claude_config_dirs();
+    dirs.extend(home().map(|home| home.join(".claude")));
+    dirs.iter()
+        .find_map(|dir| fs::read_to_string(dir.join(".credentials.json")).ok())
+        .and_then(|text| claude_token_from(&text))
 }
 
 #[cfg(target_os = "macos")]

@@ -490,6 +490,24 @@ fn quota_takes_the_latest_codex_meter_from_any_open_session() {
 }
 
 #[test]
+fn quota_follows_a_claude_config_dir_given_with_a_tilde() {
+    let fixture = Fixture::new();
+    fs::create_dir_all(fixture.path("alt")).unwrap();
+    fs::write(
+        fixture.path("alt/.claude.json"),
+        json!({"oauthAccount": {"organizationRateLimitTier": "default_claude_max_20x"}}).to_string(),
+    )
+    .unwrap();
+    fs::write(
+        fixture.path(".claude.json"),
+        json!({"oauthAccount": {"organizationRateLimitTier": "default_claude_pro"}}).to_string(),
+    )
+    .unwrap();
+    let quota = fixture.engine(&["quota"], &[("CLAUDE_CONFIG_DIR", Path::new("~/alt"))]);
+    assert_eq!(quota["claude"]["planTier"], "default_claude_max_20x");
+}
+
+#[test]
 fn quota_without_any_source_is_empty_not_an_error() {
     let fixture = Fixture::new();
     let quota = fixture.quota();
