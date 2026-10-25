@@ -192,7 +192,8 @@ public struct EngineReport: Codable, Equatable, Sendable {
 
 public enum EngineError: LocalizedError, Equatable, Sendable {
   case missing
-  case failed(Int32)
+  /// Exit status and the engine's last error line, if it printed one.
+  case failed(Int32, String? = nil)
   case timedOut
   case invalidOutput
   case unsupportedSchema(Int)
@@ -201,7 +202,8 @@ public enum EngineError: LocalizedError, Equatable, Sendable {
     switch self {
     case .missing:
       "The Burnless engine was not found inside the app. Rebuild Burnless.app with scripts/build-app.sh."
-    case .failed(let code): "The usage reader exited with status \(code)."
+    case .failed(let code, let message):
+      "The usage reader exited with status \(code)" + (message.map { ": \($0)" } ?? ".")
     case .timedOut: "Reading usage history took too long and was stopped."
     case .invalidOutput: "The usage reader returned a report Burnless could not read."
     case .unsupportedSchema(let version):

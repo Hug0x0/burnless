@@ -132,6 +132,11 @@ public enum EngineClient {
       atPath: output.path, contents: nil, attributes: [.posixPermissions: 0o600])
     let handle = try FileHandle(forWritingTo: output)
     defer { try? handle.close() }
+    let errors = directory.appendingPathComponent("errors.txt")
+    FileManager.default.createFile(
+      atPath: errors.path, contents: nil, attributes: [.posixPermissions: 0o600])
+    let errorHandle = try FileHandle(forWritingTo: errors)
+    defer { try? errorHandle.close() }
 
     let process = Process()
     process.executableURL = configuration.executable
@@ -139,7 +144,7 @@ public enum EngineClient {
     process.environment = configuration.environment(base: ProcessInfo.processInfo.environment)
     process.currentDirectoryURL = FileManager.default.temporaryDirectory
     process.standardOutput = handle
-    process.standardError = FileHandle.nullDevice
+    process.standardError = errorHandle
     process.standardInput = FileHandle.nullDevice
 
     let finished = DispatchSemaphore(value: 0)
@@ -154,10 +159,20 @@ public enum EngineClient {
       throw EngineError.timedOut
     }
     guard process.terminationStatus == 0 else {
-      throw EngineError.failed(process.terminationStatus)
+      throw EngineError.failed(process.terminationStatus, lastLine(of: errors))
     }
     let size = (try? output.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     guard size > 0, size <= 64_000_000 else { throw EngineError.invalidOutput }
     return try Data(contentsOf: output)
+  }
+
+  /// The engine's last error line, without its name prefix, kept short.
+  static func lastLine(of file: URL) -> String? {
+    guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+    guard let line = text.split(whereSeparator: \.isNewline).last?.trimmingCharacters(in: .whitespaces),
+      !line.isEmpty
+    else { return nil }
+    let message = line.hasPrefix("burnless-engine: ") ? String(line.dropFirst(17)) : line
+    return String(message.prefix(200))
   }
 }

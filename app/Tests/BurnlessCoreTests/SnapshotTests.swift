@@ -184,6 +184,13 @@ func temporaryDirectory() -> URL {
     }
   }
 
+  @Test func reportsTheEnginesErrorLine() async throws {
+    let engine = try script("echo 'burnless-engine: unknown timezone: X' >&2; exit 2")
+    await #expect(throws: EngineError.failed(2, "unknown timezone: X")) {
+      try await EngineClient.run(EngineConfiguration(executable: engine))
+    }
+  }
+
   @Test func reportsInvalidOutput() async throws {
     let engine = try script("echo 'not json'")
     await #expect(throws: EngineError.invalidOutput) {
