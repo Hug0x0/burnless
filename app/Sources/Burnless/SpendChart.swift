@@ -58,14 +58,26 @@ struct SpendChart: View {
     HStack(spacing: 10) {
       Text(effective.title).font(.system(size: 15, weight: .semibold))
         .accessibilityAddTraits(.isHeader)
-      Picker("Granularity", selection: binding) {
-        ForEach(Granularity.allCases) { Text($0.label).tag($0) }
+      // A Menu with an explicit label: a borderless menu Picker collapses to
+      // a truncated stub on recent macOS.
+      Menu {
+        Picker("Granularity", selection: binding) {
+          ForEach(Granularity.allCases) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.inline)
+        .labelsHidden()
+      } label: {
+        HStack(spacing: 4) {
+          Text(effective.label)
+          Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+        }
+        .font(.system(size: 13))
+        .foregroundStyle(.secondary)
       }
-      .pickerStyle(.menu)
-      .menuStyle(.borderlessButton)
-      .labelsHidden()
+      .menuStyle(.button)
+      .buttonStyle(.plain)
+      .menuIndicator(.hidden)
       .fixedSize()
-      .foregroundStyle(.secondary)
       .accessibilityLabel("Spend granularity")
       Spacer(minLength: 8)
       Text("USD").font(.system(size: 12)).foregroundStyle(.secondary)

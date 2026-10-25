@@ -79,12 +79,14 @@ struct SubscriptionsCard: View {
         }
         ShareBar(value: remaining / 100, tint: BurnTheme.tone(remaining: remaining), height: 5)
       } else {
-        Text(weekly == nil ? "Weekly limit not read yet" : "No reading since the weekly reset")
+        Text(
+          !harness.readsLimits ? "No limit to read · usage only"
+            : weekly == nil ? "Weekly limit not read yet" : "No reading since the weekly reset")
           .font(.system(size: 12)).foregroundStyle(.secondary)
       }
     }
     .padding(14)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(BurnTheme.inset, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     .accessibilityElement(children: .combine)
