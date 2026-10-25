@@ -43,6 +43,7 @@ const CLAUDE_KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
 /// Codex session files inspected for the newest account meter, newest first.
 const CODEX_FILES_SCANNED: usize = 24;
 const CODEX_TAIL_BYTES: u64 = 64 * 1024;
+const CODEX_TAIL_MAX_BYTES: u64 = 16 * 1024 * 1024;
 /// A logged meter this recent can correct a live over-count.
 const CODEX_LOG_TRUST_MS: i64 = 10 * 60_000;
 /// Concurrent live reads; the lowest one for the same window wins.
@@ -816,15 +817,35 @@ pub(crate) fn codex_session_files() -> Vec<PathBuf> {
 
 /// The newest *account* meter logged by Codex: `(snapshot, plan, logged at)`.
 /// Model-specific side limits (`limit_id` other than `codex`) are skipped.
+///
+/// Codex keeps sessions open for days, so the newest-named file is often not
+/// the last one written: the most recently modified files are read and the
+/// latest timestamp wins.
 fn latest_logged_codex() -> Option<(CodexSnapshot, Option<String>, Option<i64>)> {
-    codex_session_files()
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = codex_session_files()
+        .into_iter()
+        .filter_map(|file| Some((fs::metadata(&file).ok()?.modified().ok()?, file)))
+        .collect();
+    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files
         .iter()
-        .rev()
         .take(CODEX_FILES_SCANNED)
-        .find_map(|file| {
-            let tail = tail(file, CODEX_TAIL_BYTES)?;
-            tail.lines().rev().find_map(logged_codex_line)
-        })
+        .filter_map(|(_, file)| last_logged_codex(file))
+        .max_by_key(|(_, _, observed_at_ms)| observed_at_ms.unwrap_or(i64::MIN))
+}
+
+/// The last account meter in one session file. Reads a growing tail, so a
+/// long line after the meter (a tool output, an image) does not hide it.
+fn last_logged_codex(file: &Path) -> Option<(CodexSnapshot, Option<String>, Option<i64>)> {
+    let len = fs::metadata(file).ok()?.len();
+    let mut bytes = CODEX_TAIL_BYTES;
+    loop {
+        let found = tail(file, bytes).and_then(|text| text.lines().rev().find_map(logged_codex_line));
+        if found.is_some() || bytes >= len || bytes >= CODEX_TAIL_MAX_BYTES {
+            return found;
+        }
+        bytes *= 4;
+    }
 }
 
 pub(crate) fn logged_codex_line(line: &str) -> Option<(CodexSnapshot, Option<String>, Option<i64>)> {

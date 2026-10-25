@@ -457,6 +457,28 @@ fn quota_reads_local_plans_and_meters_without_credentials() {
 }
 
 #[test]
+fn quota_takes_the_latest_codex_meter_from_any_open_session() {
+    let fixture = Fixture::new();
+    fixture.write(
+        ".codex/sessions/2026/10/17/rollout-2026-10-17T09-00-00-new.jsonl",
+        &[codex_rate_limits("2026-10-17T09:00:00.000Z", 10.0, "plus")],
+    );
+    // A session started earlier but still in use logged a later meter,
+    // followed by a line longer than the first tail read.
+    fixture.write(
+        ".codex/sessions/2026/10/03/rollout-2026-10-03T18-00-00-old.jsonl",
+        &[
+            codex_rate_limits("2026-10-17T10:00:00.000Z", 12.0, "plus"),
+            json!({"timestamp": "2026-10-17T10:00:01.000Z", "type": "response_item",
+                "payload": {"output": "x".repeat(200_000)}})
+            .to_string(),
+        ],
+    );
+    let quota = fixture.quota();
+    assert_eq!(quota["codex"]["snapshot"]["weekly"]["usedPercent"], 12.0);
+}
+
+#[test]
 fn quota_without_any_source_is_empty_not_an_error() {
     let fixture = Fixture::new();
     let quota = fixture.quota();
