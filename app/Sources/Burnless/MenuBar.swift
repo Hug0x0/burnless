@@ -6,12 +6,15 @@ import SwiftUI
 
 struct MenuBarLabel: View {
   let remaining: Double?
+  /// An old reading is marked "~" rather than shown as current.
+  var stale = false
   var body: some View {
     HStack(spacing: 4) {
       Image(systemName: "flame.fill")
-      Text(remaining.map { "\(Int($0.rounded(.down)))%" } ?? "Burn").monospacedDigit()
+      Text(remaining.map { (stale ? "~" : "") + "\(Int($0.rounded(.down)))%" } ?? "Burn").monospacedDigit()
     }
-    .accessibilityLabel("Burnless " + (remaining.map { "\(Int($0)) percent left" } ?? ""))
+    .accessibilityLabel(
+      "Burnless " + (remaining.map { "\(Int($0)) percent left" + (stale ? ", last reading may be out of date" : "") } ?? ""))
   }
 }
 
@@ -259,8 +262,10 @@ private struct CompactOverview: View {
         HarnessBadge(harness: harness, size: 22)
         Text(harness.name).font(.system(size: 14, weight: .medium))
         Spacer()
-        Text(remaining.map { $0.formatted(.number.precision(.fractionLength(0))) + "%" } ?? "—")
+        Text(remaining.map { (store.isStale(harness) ? "~" : "") + $0.formatted(.number.precision(.fractionLength(0))) + "%" } ?? "—")
           .font(.system(size: 17, weight: .semibold)).monospacedDigit()
+          .foregroundStyle(store.isStale(harness) ? BurnTheme.quotaMuted : .primary)
+          .help(store.isStale(harness) ? "Last reading may be out of date." : "")
           .contentTransition(.numericText())
       }
       ShareBar(value: (remaining ?? 0) / 100, tint: BurnTheme.tone(remaining: remaining ?? 0), height: 5)
@@ -304,6 +309,7 @@ private struct CompactHarness: View {
             NoReadingSinceReset(harness: harness, reset: forecast.reset, compact: true)
           } else {
             RemainingHeadline(remaining: forecast.remaining, title: "Weekly limit")
+            if forecast.isStale(at: now) { StaleReading(harness: harness, forecast: forecast, compact: true) }
             QuotaOutlookLabel(outlook: .make(forecast), compact: true)
             QuotaChartView(
               forecast: forecast, samples: samples, color: BurnTheme.color(for: harness),

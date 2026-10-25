@@ -64,7 +64,8 @@ struct BurnlessApp: App {
     MenuBarExtra(isInserted: $showInMenuBar) {
       MenuPopover().environment(store)
     } label: {
-      MenuBarLabel(remaining: store.remaining(store.settings.menuBarQuota))
+      MenuBarLabel(
+        remaining: store.remaining(store.settings.menuBarQuota), stale: store.isStale(store.settings.menuBarQuota))
     }
     .menuBarExtraStyle(.window)
     // Screenshots of the menu bar popover render it in a plain window.
@@ -188,7 +189,9 @@ private struct QuotaSourceMenu: View {
       }
     } label: {
       Text(
-        store.remaining(store.settings.menuBarQuota).map { "\(Int($0.rounded(.down)))%" } ?? "Burn"
+        store.remaining(store.settings.menuBarQuota).map {
+          (store.isStale(store.settings.menuBarQuota) ? "~" : "") + "\(Int($0.rounded(.down)))%"
+        } ?? "Burn"
       )
       .monospacedDigit().fontWeight(.medium).fixedSize()
     }
@@ -220,7 +223,8 @@ private struct Sidebar: View {
             HarnessBadge(harness: harness, size: 20)
           } trailing: {
             if let remaining = store.remaining(harness) {
-              QuotaBadge(remaining: remaining).help("\(harness.name) weekly limit remaining")
+              QuotaBadge(remaining: remaining, stale: store.isStale(harness))
+                .help("\(harness.name) weekly limit remaining" + (store.isStale(harness) ? " · last reading may be out of date" : ""))
             } else if summary?.availability.hasData == true, let totals = summary?.totals {
               spend(totals)
             }

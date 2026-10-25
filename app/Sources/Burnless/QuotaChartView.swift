@@ -23,6 +23,8 @@ struct QuotaChartView: View {
   private var showsForecast: Bool { range == .untilReset && forecast.projectedUse != nil }
   private var showsIdeal: Bool { range.isCycle }
   private var runsOut: Bool { showsForecast && forecast.runsOut }
+  /// Time since the last reading is drawn as unknown, up to a "Now" rule.
+  private var stale: Bool { forecast.isStale(at: now) && domain.contains(now) }
   private var drawn: [QuotaSample] { QuotaChart.stepped(samples) }
   private var gridDates: [Date] { QuotaChart.gridDates(range: range, forecast: forecast, now: now) }
   private var cursor: Date { selected ?? forecast.observedAt }
@@ -51,6 +53,7 @@ struct QuotaChartView: View {
   private var chart: some View {
     Chart {
       if !minimal { currentDayBand }
+      if stale { unreadBand }
       RuleMark(x: .value("Date", domain.lowerBound)).foregroundStyle(.clear)
       RuleMark(x: .value("Date", domain.upperBound)).foregroundStyle(.clear)
       if minimal && runsOut { lockoutBand }
@@ -61,6 +64,7 @@ struct QuotaChartView: View {
       if showsForecast { forecastLine }
       if minimal && showsForecast { forecastEnd }
       if range == .untilReset && domain.contains(forecast.reset) { resetRule }
+      if stale { nowRule }
       cursorMarks
     }
     .chartXScale(domain: domain, range: .plotDimension(endPadding: minimal ? 0 : 12))
@@ -116,6 +120,33 @@ struct QuotaChartView: View {
       )
       .foregroundStyle(color.opacity(0.07))
     }
+  }
+
+  /// The span with no reading: the limit may have moved since.
+  @ChartContentBuilder private var unreadBand: some ChartContent {
+    let gap = now.timeIntervalSince(forecast.observedAt) / domain.upperBound.timeIntervalSince(domain.lowerBound)
+    let band = RectangleMark(
+      xStart: .value("Last reading", max(forecast.observedAt, domain.lowerBound)), xEnd: .value("Now", now),
+      yStart: .value("Low", 0), yEnd: .value("High", 100)
+    )
+    .foregroundStyle(Color.secondary.opacity(0.09))
+    if gap > 0.12 {
+      band.annotation(position: .overlay, alignment: .bottom) {
+        Text("No reading").font(.system(size: 10, weight: .medium)).foregroundStyle(muted)
+          .padding(.bottom, 6).fixedSize()
+      }
+    } else {
+      band
+    }
+  }
+
+  @ChartContentBuilder private var nowRule: some ChartContent {
+    RuleMark(x: .value("Date", now), yStart: .value("Low", 0), yEnd: .value("High", 100))
+      .foregroundStyle(muted.opacity(0.6))
+      .lineStyle(StrokeStyle(lineWidth: 1))
+      .annotation(position: .trailing, alignment: .top, spacing: 4) {
+        Text("Now").font(.system(size: 10, weight: .medium)).foregroundStyle(muted)
+      }
   }
 
   /// Hatched span between the projected run-out and the reset: time without quota.
@@ -269,7 +300,7 @@ struct QuotaChartView: View {
 
   @ChartContentBuilder private var cursorMarks: some ChartContent {
     if domain.contains(cursor) {
-      if minimal && selected == nil {
+      if minimal && selected == nil && !stale {
         RuleMark(x: .value("Date", cursor), yStart: .value("Low", 0), yEnd: .value("High", 100))
           .foregroundStyle(color.opacity(0.5))
           .lineStyle(StrokeStyle(lineWidth: 1))

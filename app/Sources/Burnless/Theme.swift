@@ -287,9 +287,11 @@ struct SectionLabel: View {
 /// Small quota pill: "62%" tinted by how much is left.
 struct QuotaBadge: View {
   let remaining: Double
+  /// An old reading is greyed and marked "~".
+  var stale = false
   var body: some View {
-    let tone = BurnTheme.tone(remaining: remaining)
-    Text("\(Int(remaining.rounded(.down)))%")
+    let tone = stale ? Color.secondary : BurnTheme.tone(remaining: remaining)
+    Text((stale ? "~" : "") + "\(Int(remaining.rounded(.down)))%")
       .font(.system(size: 10, weight: .semibold)).monospacedDigit()
       .foregroundStyle(tone)
       .padding(.horizontal, 6).padding(.vertical, 2)

@@ -330,6 +330,11 @@ public struct Forecast: Equatable, Sendable {
   public var elapsed: Double { max(0, min(1, observedAt.timeIntervalSince(start) / duration)) }
   /// The window ended after this reading, so its value no longer applies.
   public func hasReset(at now: Date) -> Bool { now >= reset }
+  /// The reading is old enough that usage since may have moved it: six
+  /// hours for a weekly window, half an hour for a 5-hour session.
+  public func isStale(at now: Date) -> Bool {
+    now.timeIntervalSince(observedAt) > max(1_800, duration / 28)
+  }
   /// Remaining once a reset has passed: a new window starts full.
   public func remaining(at now: Date) -> Double { hasReset(at: now) ? 100 : remaining }
 

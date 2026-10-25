@@ -72,7 +72,11 @@ struct SubscriptionsCard: View {
             .font(.system(size: 36, weight: .medium)).monospacedDigit().contentTransition(.numericText())
           Text("% remaining").font(.system(size: 13)).foregroundStyle(.secondary)
           Spacer()
-          if let weekly, !weekly.hasReset(at: store.clock) {
+          if let weekly, weekly.isStale(at: store.clock) {
+            Label("Read " + QuotaText.duration(store.clock.timeIntervalSince(weekly.observedAt)) + " ago", systemImage: "clock.badge.exclamationmark")
+              .font(.system(size: 12)).foregroundStyle(BurnTheme.warning).monospacedDigit()
+              .help("The last reading may be out of date. Open \(harness.name) for details.")
+          } else if let weekly, !weekly.hasReset(at: store.clock) {
             Text("Resets in " + QuotaText.duration(weekly.reset.timeIntervalSince(store.clock)))
               .font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
           }

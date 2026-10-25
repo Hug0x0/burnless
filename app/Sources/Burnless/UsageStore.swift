@@ -382,6 +382,9 @@ enum LivePacing {
     return weekly.remaining
   }
 
+  /// The weekly reading is old enough that the real number may differ.
+  func isStale(_ harness: Harness) -> Bool { weekly(harness)?.isStale(at: clock) ?? false }
+
   func samples(_ series: QuotaSeries, range: QuotaChartRange) -> [QuotaSample] {
     guard let forecast = forecast(series) else { return [] }
     return QuotaChart.samples(

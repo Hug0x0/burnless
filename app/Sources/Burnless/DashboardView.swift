@@ -103,10 +103,7 @@ struct DashboardView: View {
           , kind: .warning)
       }
     }
-    // Gemini CLI is optional: a Mac without its history is not worth a warning.
-    let missing = dashboard.unavailable.filter {
-      !($0 == .gemini && store.snapshot?.availability($0) == .notFound)
-    }
+    let missing = dashboard.unavailable
     if dashboard.harness == nil, !missing.isEmpty, dashboard.hasAnyHistory {
       let included = dashboard.scope.filter { !dashboard.unavailable.contains($0) }.map(\.name)
       ForEach(missing, id: \.self) { source in

@@ -136,6 +136,7 @@ struct QuotaHero: View {
             NoReadingSinceReset(harness: harness, reset: forecast.reset)
           } else {
             RemainingHeadline(remaining: forecast.remaining)
+            if forecast.isStale(at: now) { StaleReading(harness: harness, forecast: forecast) }
             QuotaOutlookLabel(outlook: .make(forecast))
             QuotaFacts(forecast: forecast, series: series, harness: harness)
           }

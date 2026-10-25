@@ -222,6 +222,9 @@ public struct Dashboard: Equatable, Sendable {
       case .stale(let lastSuccess, _):
         knownThrough[source] = calendar.key(lastSuccess)
         stale.append(source)
+      // Gemini CLI is optional: without its history nothing is missing
+      // from the overview, only from its own page.
+      case .notFound where source == .gemini && harness == nil: break
       case .notFound, .failed: unavailable.append(source)
       }
     }

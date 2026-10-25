@@ -79,6 +79,15 @@ func reading(
     #expect(abs(half.paceDelta - -20) < 1e-9)
   }
 
+  @Test func flagsOldReadingsAsStale() {
+    #expect(!half.isStale(at: at("2026-10-16T17:59:00Z")))
+    #expect(half.isStale(at: at("2026-10-16T18:01:00Z")))
+    let session = Forecast(
+      reading: reading("2026-10-16T12:00:00Z", used: 10, reset: "2026-10-16T15:00:00Z", minutes: 300))
+    #expect(!session.isStale(at: at("2026-10-16T12:29:00Z")))
+    #expect(session.isStale(at: at("2026-10-16T12:31:00Z")))
+  }
+
   @Test func aSlowPaceLastsUntilReset() {
     let slow = Forecast(
       reading: reading("2026-10-16T12:00:00Z", used: 20, reset: "2026-10-20T00:00:00Z"))

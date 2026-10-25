@@ -135,6 +135,49 @@ struct NoReadingSinceReset: View {
   }
 }
 
+/// A reading old enough that usage since may have moved it: says when it was
+/// taken and how to get a newer one.
+struct StaleReading: View {
+  @Environment(UsageStore.self) private var store
+  let harness: Harness
+  let forecast: Forecast
+  var compact = false
+
+  var body: some View {
+    let age = QuotaText.duration(store.clock.timeIntervalSince(forecast.observedAt))
+    VStack(alignment: .leading, spacing: 8) {
+      Label {
+        Text("Last reading \(age) ago, ")
+          + Text(forecast.observedAt.formatted(.dateTime.weekday(.abbreviated).day().hour().minute()))
+          + Text(". \(hint)")
+      } icon: {
+        Image(systemName: "clock.badge.exclamationmark")
+      }
+      .font(.system(size: compact ? 12 : 11.5))
+      .foregroundStyle(compact ? BurnTheme.quotaMuted : BurnTheme.muted)
+      .fixedSize(horizontal: false, vertical: true)
+      if !store.settings.liveQuotas && !store.isDemo {
+        Button("Turn on live limits") {
+          store.settings.liveQuotas = true
+          store.checkQuotas(hard: true)
+        }
+        .controlSize(.small)
+        .help("Reads current limits from Anthropic and OpenAI with your existing sign-ins. Change it in Settings → Quotas.")
+      }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var hint: String {
+    if store.settings.liveQuotas { return "Waiting for the next live reading." }
+    return switch harness {
+    case .claude: "Claude Code saves its limits only now and then, so the real number may differ."
+    case .codex: "Codex logs its limit with each request on this Mac, so use elsewhere shows up after your next one."
+    case .gemini: ""
+    }
+  }
+}
+
 /// Model-scoped limits and extra usage: title, detail, a thin bar and the value.
 struct ClaudeMeterRow: View {
   let title: String
