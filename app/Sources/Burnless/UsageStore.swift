@@ -66,6 +66,8 @@ enum Appearance: String, CaseIterable, Identifiable {
     let name = "io.github.hug0x0.burnless.demo"
     let defaults = UserDefaults(suiteName: name) ?? .standard
     defaults.removePersistentDomain(forName: name)
+    // Gemini CLI logs no plan, so the demo names one.
+    defaults.set("pro", forKey: "geminiPlan")
     return AppSettings(defaults: defaults)
   }
 

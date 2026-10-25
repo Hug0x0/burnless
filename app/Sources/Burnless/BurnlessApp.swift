@@ -61,7 +61,7 @@ struct BurnlessApp: App {
           .disabled(store.isDemo)
       }
     }
-    MenuBarExtra(isInserted: $showInMenuBar) {
+    MenuBarExtra(isInserted: WindowCapture.isActive ? .constant(false) : $showInMenuBar) {
       MenuPopover().environment(store)
     } label: {
       MenuBarLabel(
@@ -92,7 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     let defaults = UserDefaults.standard
     let menuBarOnly = defaults.bool(forKey: "menuBarOnly") && (defaults.object(forKey: "showInMenuBar") as? Bool ?? true)
-    if menuBarOnly && !WindowCapture.isActive {
+    if WindowCapture.isActive {
+      // Captures render in the background: no Dock icon, no focus taken.
+      NSApp.setActivationPolicy(.accessory)
+    } else if menuBarOnly {
       NSApp.setActivationPolicy(.accessory)
       DispatchQueue.main.async {
         for window in NSApp.windows where window.identifier?.rawValue.contains("dashboard") == true {
@@ -308,6 +311,7 @@ private struct StatusFooter: View {
   static func scheduleIfRequested() {
     let environment = ProcessInfo.processInfo.environment
     guard let path = environment["BURNLESS_CAPTURE"], !path.isEmpty else { return }
+    hideWindows()
     let delay = environment["BURNLESS_CAPTURE_DELAY"].flatMap(Double.init) ?? 6
     let size = environment["BURNLESS_WINDOW_SIZE"]?.split(separator: "x").compactMap { Double($0) }
     if let size, size.count == 2 {
@@ -329,6 +333,20 @@ private struct StatusFooter: View {
         try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
       } catch {
         FileHandle.standardError.write(Data("capture: \(error.localizedDescription)\n".utf8))
+      }
+    }
+  }
+
+  /// Keeps capture windows invisible and off screen as SwiftUI opens them;
+  /// views still draw into the cached bitmap.
+  private static func hideWindows() {
+    Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { _ in
+      MainActor.assumeIsolated {
+        for window in NSApp.windows where window.alphaValue != 0 {
+          window.alphaValue = 0
+          window.ignoresMouseEvents = true
+          window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        }
       }
     }
   }

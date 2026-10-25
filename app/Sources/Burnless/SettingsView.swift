@@ -309,10 +309,11 @@ private struct PlanRow: View {
   var body: some View {
     let plan = store.plan(for: harness)
     LabeledContent {
-      TextField("Override", text: $text, prompt: Text(harness.readsLimits ? "Detected" : "plus, pro…"))
+      // A visible border: in a grouped form a plain field reads as a label.
+      TextField("Override", text: $text, prompt: Text(harness.readsLimits ? "Override…" : "plus, pro…"))
         .labelsHidden()
+        .textFieldStyle(.roundedBorder)
         .frame(width: 110)
-        .multilineTextAlignment(.trailing)
     } label: {
       HStack(spacing: 8) {
         HarnessBadge(harness: harness, size: 18)
@@ -321,8 +322,12 @@ private struct PlanRow: View {
           Text(plan.label + (plan.detected.map { " · detected \($0)" } ?? ""))
             .font(.caption).foregroundStyle(.secondary)
           if let ignored = plan.ignoredOverride {
-            Text("“\(ignored)” is not a known plan or price, so it is ignored.")
-              .font(.caption).foregroundStyle(BurnTheme.warning)
+            HStack(spacing: 6) {
+              Text("“\(ignored)” is not a known plan or price, so it is ignored.")
+                .foregroundStyle(BurnTheme.warning)
+              Button("Clear") { text = "" }.buttonStyle(.link)
+            }
+            .font(.caption)
           }
         }
       }
