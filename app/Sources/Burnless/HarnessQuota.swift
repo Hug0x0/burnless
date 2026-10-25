@@ -21,7 +21,7 @@ struct QuotaOutlook: Equatable {
     guard forecast.projectedUse != nil else {
       return QuotaOutlook(
         tone: .good, headline: "Room to keep building",
-        detail: "A forecast will appear once this window has recorded usage.")
+        detail: "A forecast appears once this window has a few hours of usage.")
     }
     if forecast.runsOut {
       let early = QuotaText.duration(forecast.reset.timeIntervalSince(forecast.projectedEnd))
@@ -175,7 +175,7 @@ struct QuotaFacts: View {
         let hours = max(1 / 60, forecast.reset.timeIntervalSince(max(store.clock, forecast.observedAt)) / 3600)
         row("Suggested pace", "speedometer", QuotaText.percentOneDecimal(forecast.remaining / hours) + "\u{00A0}/ hour", tint: BurnTheme.color(for: harness))
       } else {
-        row("Suggested pace", "speedometer", QuotaText.percentOneDecimal(forecast.dailyAllowance) + "\u{00A0}/ day", tint: BurnTheme.color(for: harness))
+        row("Suggested pace", "speedometer", QuotaText.percentOneDecimal(forecast.dailyAllowance(at: store.clock)) + "\u{00A0}/ day", tint: BurnTheme.color(for: harness))
         row("Recorded resets", "arrow.counterclockwise", resetSummary(resets))
           .help("Resets seen in Burnless's readings. A mid-window reset is a manual reset or a provider correction.")
         if harness == .codex, let credits = store.quota?.codex.snapshot?.resetCreditsAvailable {

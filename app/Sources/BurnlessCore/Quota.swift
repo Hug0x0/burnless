@@ -338,18 +338,24 @@ public struct Forecast: Equatable, Sendable {
   /// Remaining once a reset has passed: a new window starts full.
   public func remaining(at now: Date) -> Double { hasReset(at: now) ? 100 : remaining }
 
-  /// Usage at reset if the observed pace continues.
+  /// Usage at reset if the observed pace continues. None in the first 3% of
+  /// a window (at least 15 minutes): 1% two minutes after a reset is not a
+  /// pace worth projecting.
   public var projectedUse: Double? {
-    guard elapsed > 0, usedPercent > 0 else { return nil }
+    guard usedPercent > 0, elapsed * duration >= max(900, duration * 0.03) else { return nil }
     return usedPercent / elapsed
   }
   public var daysEarly: Double {
     guard let projectedUse, projectedUse > 100 else { return 0 }
     return duration * (1 - 100 / projectedUse) / 86_400
   }
-  /// Remaining share per day that lasts exactly until reset.
-  public var dailyAllowance: Double {
-    remaining / max(1.0 / 1440, duration * (1 - elapsed) / 86_400)
+  /// Remaining share per day that lasts exactly until reset, counted from
+  /// the reading.
+  public var dailyAllowance: Double { dailyAllowance(at: observedAt) }
+  /// The same from `now` when the reading is older: the days left shrink
+  /// even though usage since is unknown.
+  public func dailyAllowance(at now: Date) -> Double {
+    remaining / max(1.0 / 1440, reset.timeIntervalSince(max(now, observedAt)) / 86_400)
   }
   public var projectedEnd: Date {
     guard let projectedUse, projectedUse > 100 else { return reset }

@@ -347,7 +347,7 @@ private struct CompactHarness: View {
       }
       if !forecast.hasReset(at: now) {
         detail("Resets in", QuotaText.duration(forecast.reset.timeIntervalSince(now)))
-        detail("Suggested pace", QuotaText.percentOneDecimal(forecast.dailyAllowance) + "\u{00A0}/ day")
+        detail("Suggested pace", QuotaText.percentOneDecimal(forecast.dailyAllowance(at: now)) + "\u{00A0}/ day")
       }
       if harness == .codex, let credits = store.quota?.codex.snapshot?.resetCreditsAvailable {
         detail("Banked resets", "\(credits)")

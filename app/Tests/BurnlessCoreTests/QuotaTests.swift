@@ -79,6 +79,27 @@ func reading(
     #expect(abs(half.paceDelta - -20) < 1e-9)
   }
 
+  @Test func waitsBeforeProjectingANewWindow() {
+    let early = Forecast(
+      reading: reading("2026-10-13T00:02:00Z", used: 1, reset: "2026-10-20T00:00:00Z"))
+    #expect(early.projectedUse == nil)
+    #expect(!early.runsOut)
+  }
+
+  @Test func suggestedPaceCountsTheDaysLeftFromNow() {
+    // 30% left at reset in 3.5 days; two days later 1.5 days remain.
+    #expect(abs(half.dailyAllowance(at: at("2026-10-18T12:00:00Z")) - 20) < 1e-9)
+  }
+
+  @Test func chartRangesRunToNowAfterAnOldReading() {
+    let now = at("2026-10-18T12:00:00Z")
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    #expect(QuotaChart.window(range: .today, forecast: half, now: now, calendar: utc).lowerBound == at("2026-10-18T00:00:00Z"))
+    #expect(QuotaChart.window(range: .week, forecast: half, now: now).lowerBound == at("2026-10-11T12:00:00Z"))
+    #expect(QuotaChart.window(range: .resetToToday, forecast: half, now: now).upperBound == now)
+  }
+
   @Test func flagsOldReadingsAsStale() {
     #expect(!half.isStale(at: at("2026-10-16T17:59:00Z")))
     #expect(half.isStale(at: at("2026-10-16T18:01:00Z")))

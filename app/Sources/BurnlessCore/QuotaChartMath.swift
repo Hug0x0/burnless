@@ -24,25 +24,15 @@ public enum QuotaChart {
   public static func window(
     range: QuotaChartRange, forecast: Forecast, now: Date, calendar: Calendar = .current
   ) -> ClosedRange<Date> {
-    let cursor = min(now, forecast.observedAt)
+    // Ranges run up to now even when the reading is older, so the time
+    // since it shows as unread rather than being cut off.
+    let end = range == .untilReset ? max(now, forecast.reset) : max(now, forecast.observedAt)
     let start: Date
-    let end: Date
     switch range {
-    case .untilReset:
-      start = forecast.start
-      end = max(now, forecast.reset)
-    case .resetToToday:
-      start = forecast.start
-      end = max(cursor, forecast.observedAt)
-    case .today:
-      start = calendar.startOfDay(for: cursor)
-      end = max(now, forecast.observedAt)
-    case .week:
-      start = cursor.addingTimeInterval(-7 * 86_400)
-      end = max(now, forecast.observedAt)
-    case .month:
-      start = cursor.addingTimeInterval(-30 * 86_400)
-      end = max(now, forecast.observedAt)
+    case .untilReset, .resetToToday: start = forecast.start
+    case .today: start = calendar.startOfDay(for: now)
+    case .week: start = now.addingTimeInterval(-7 * 86_400)
+    case .month: start = now.addingTimeInterval(-30 * 86_400)
     }
     return start...max(start.addingTimeInterval(1), end)
   }
