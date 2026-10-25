@@ -9,12 +9,14 @@ out="$(mkdir -p "$1" && cd "$1" && pwd)"; shift
 # WINDOW=settings|popover captures that window; TAB picks the settings tab.
 capture() {
   local name="$1" size="$2" route="$3" appearance="$4"; shift 4
-  open -n -W --env BURNLESS_CAPTURE="$out/$name.png" --env BURNLESS_CAPTURE_DELAY="${DELAY:-6}" \
-    --env BURNLESS_WINDOW_SIZE="$size" --env BURNLESS_ROUTE="$route" \
-    --env BURNLESS_APPEARANCE="$appearance" --env BURNLESS_PERIOD="${PERIOD:-last30}" \
-    --env BURNLESS_CAPTURE_WINDOW="${WINDOW:-dashboard}" --env BURNLESS_SETTINGS_TAB="${TAB:-general}" \
-    --env BURNLESS_POPOVER="$([[ "${WINDOW:-}" == popover ]] && echo 1 || echo 0)" --env BURNLESS_POPOVER_TAB="${POPOVER_TAB:-general}" \
-    "$root/dist/Burnless.app" ${1+--args "$@"}
+  # Run the binary directly: capture mode keeps its windows invisible and off
+  # screen, so nothing appears or takes focus while it renders.
+  BURNLESS_CAPTURE="$out/$name.png" BURNLESS_CAPTURE_DELAY="${DELAY:-6}" \
+    BURNLESS_WINDOW_SIZE="$size" BURNLESS_ROUTE="$route" \
+    BURNLESS_APPEARANCE="$appearance" BURNLESS_PERIOD="${PERIOD:-last30}" \
+    BURNLESS_CAPTURE_WINDOW="${WINDOW:-dashboard}" BURNLESS_SETTINGS_TAB="${TAB:-general}" \
+    BURNLESS_POPOVER="$([[ "${WINDOW:-}" == popover ]] && echo 1 || echo 0)" BURNLESS_POPOVER_TAB="${POPOVER_TAB:-general}" \
+    "$root/dist/Burnless.app/Contents/MacOS/Burnless" "$@"
   if [[ -f "$out/$name.png" ]]; then echo "$out/$name.png"; else echo "capture failed: $name" >&2; fi
 }
 capture overview 1240x1000 overview light "$@"

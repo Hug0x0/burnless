@@ -4,9 +4,9 @@ A native macOS app for **Claude Code**, **Codex** and **Gemini CLI**: API-equiva
 models, subscription limits with pace and forecast, plan value, and a menu bar
 quota. Everything is read from files on your Mac by default.
 
-Burnless is [Agent Burn](https://github.com/Melvynx/agent-burn) focused on two
-harnesses: the same dashboard, quota charts, menu bar and settings, for Claude Code
-and Codex only. Its data engine is [ccusage](https://github.com/ccusage/ccusage).
+Burnless is [Agent Burn](https://github.com/Melvynx/agent-burn) focused on three
+harnesses: the same dashboard, quota charts, menu bar and settings, for Claude Code,
+Codex and Gemini CLI only. Its data engine is [ccusage](https://github.com/ccusage/ccusage).
 
 ![Overview (demo data)](docs/screenshots/overview.png)
 
@@ -14,9 +14,13 @@ and Codex only. Its data engine is [ccusage](https://github.com/ccusage/ccusage)
 | --- | --- | --- |
 | ![](docs/screenshots/claude.png) | ![](docs/screenshots/codex.png) | ![](docs/screenshots/menu-bar.png) |
 
-| Dark | Menu bar · Codex | Settings · Quotas |
+| Gemini CLI | Menu bar · Codex | Menu bar · Gemini |
 | --- | --- | --- |
-| ![](docs/screenshots/overview-dark.png) | ![](docs/screenshots/menu-bar-codex.png) | ![](docs/screenshots/settings-quotas.png) |
+| ![](docs/screenshots/gemini.png) | ![](docs/screenshots/menu-bar-codex.png) | ![](docs/screenshots/menu-bar-gemini.png) |
+
+| Dark | Claude Code · dark | Settings · Quotas |
+| --- | --- | --- |
+| ![](docs/screenshots/overview-dark.png) | ![](docs/screenshots/claude-dark.png) | ![](docs/screenshots/settings-quotas.png) |
 
 The layout follows the screenshots on Agent Burn's site: a page header, large
 numbers without icon badges, the system accent color and a flat menu bar
@@ -30,8 +34,8 @@ real usage.
 - **Claude**: 5-hour session and weekly limits side by side, each with remaining share,
   pace badge (`+10 pts ahead` / `−8 pts behind`), reset countdown and an until-reset chart
   with even pace, forecast and the locked-out span when you would run out early. A
-  one-line verdict ("On track." / "Session runs out ≈ 22:04."), model-scoped weekly
-  limits and extra usage credits.
+  one-line verdict ("Room to keep building" / "A little ahead of pace" / "Limit reached"),
+  model-scoped weekly limits and extra usage credits.
 - **Codex**: weekly quota with remaining, pace, reset time, used share, suggested daily
   pace, $ per percent, banked resets and the shorter window when Codex reports one. The
   chart range is selectable (Until reset, Reset to today, Today, Last 7 / 30 days). With
@@ -54,21 +58,24 @@ real usage.
 - **Avg tokens / $** and **Models**, as in Agent Burn.
 - **Days recorded**: distinct days with usage in all available history (not
   affected by the period).
-- **Daily spend**: Swift Charts histogram, stacked by harness in the overview,
-  with Day / Week / Month and hover details.
-- **By harness**: Claude Code and Codex spend, tokens and comparison bar. Click
-  one to open its view.
+- **Daily spend**: Swift Charts histogram with Day / Week / Month; hovering a bar
+  shows the split by harness in the overview.
+- **By harness**: Claude Code, Codex and Gemini CLI spend and tokens. Click one to
+  open its view.
 - **Models · Available source data**: models seen in your logs, with tokens,
   spend and share. You can search and sort them.
 
 Periods: Today, Yesterday, Reset to date, Week to date, This month, Last 7 days,
-Last 30 days (default), Year to date, All time. Navigation: Overview (with a
-Subscriptions card), Claude Code, Codex. Refresh with ⌘R; check limits now with ⇧⌘R.
+Last 30 days (default), Year to date, All time. Reset to date follows the harness's
+weekly window (on the overview, the one shown in the menu bar) and says when it falls
+back to 7 days. Navigation: Overview (with a Subscriptions card), Claude Code, Codex,
+Gemini CLI. Refresh with ⌘R; check limits now with ⇧⌘R.
 
-**Menu bar**: a flame with the weekly remaining of the harness you choose, and a popover
-with General / Codex / Claude tabs (spend, tokens, quota remaining, busiest agents, top
-models, weekly chart and usage details). Optional menu-bar-only mode, launch at login,
-background collection and update checks are in Settings.
+**Menu bar**: a flame with the weekly remaining of the harness you choose (`~62%` when
+the reading is old), and a popover with General / Claude / Codex / Gemini tabs: spend,
+tokens, weekly remaining and spend by harness, and per harness the plan, limit chart and
+details. Optional menu-bar-only mode, launch at login, background collection and update
+checks are in Settings.
 
 ## Install
 
@@ -117,13 +124,15 @@ Burnless only reads local history. It uses ccusage's resolution:
 
 | Harness | Default | Override |
 | --- | --- | --- |
-| Claude Code | `~/.config/claude/projects`, `~/.claude/projects` | `CLAUDE_CONFIG_DIR` (comma-separated) |
-| Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` | `CODEX_HOME` (comma-separated) |
-| Gemini CLI | `~/.gemini/tmp/<project>/chats` | `GEMINI_DATA_DIR` (comma-separated) |
+| Claude Code | `$XDG_CONFIG_HOME/claude/projects` (`~/.config/claude`), `~/.claude/projects` | `CLAUDE_CONFIG_DIR` (comma-separated, `~` expanded) |
+| Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` (plain and `.jsonl.zst`) | `CODEX_HOME` (comma-separated, used as typed) |
+| Gemini CLI | `~/.gemini/tmp/<project>/chats` | `GEMINI_DATA_DIR` (comma-separated, used as typed) |
 
-Settings → Sources shows the folders being read and lets you **Choose Folder…**
-for each harness (passed to the engine as the variables above). If one source is
-missing or fails, the other still works.
+Settings → Data → Sources shows the folders being read and lets you **Choose Folder…**
+for each harness; a folder chosen there replaces the variable. The variables only reach
+the app when it is started from a terminal (Finder and login items do not read your
+shell profile), so Choose Folder… is the usual way. If one source is missing or fails,
+the others still work.
 
 Privacy and safety:
 
@@ -147,7 +156,9 @@ network request:
   meters that belong to a different signed-in account.
 
 These are as fresh as the last time Claude Code or Codex wrote them; each card says how
-old its reading is. Settings → Quotas → **Read live limits** (off by default) also asks
+old its reading is. A reading older than six hours (half an hour for a session) is
+flagged as possibly out of date: the page names its time, the chart greys the span since
+it up to a Now rule, and the menu bar and sidebar show `~62%`. Settings → Quotas → **Read live limits** (off by default) also asks
 the providers once a minute, using the endpoints Codex and Claude Code call themselves:
 `chatgpt.com/backend-api/wham/usage` with the token in `~/.codex/auth.json`, and
 `api.anthropic.com/api/oauth/usage` with Claude Code's Keychain item
@@ -181,7 +192,7 @@ The engine (`engine/`) calls ccusage's own loaders. It does not reimplement the 
 - Days are grouped in your Mac's time zone (passed explicitly as `--timezone`), so
   DST days work correctly.
 
-Each row is a (source, local date, model) cell. Token fields mean the same thing for both sources:
+Each row is a (source, local date, model) cell. Token fields mean the same thing for every source:
 
 - `input`: input that was neither read from nor written to cache. Codex reports
   input *including* cache, so ccusage's `non_cached_input_tokens` normalizes it.
@@ -240,10 +251,10 @@ between the two runs.
 
 ## Troubleshooting
 
-- **"History folder not found"**: check Settings → Sources. Use *Choose Folder…* if your
+- **"History folder not found"**: check Settings → Data → Sources. Use *Choose Folder…* if your
   Claude config or Codex home is in a custom location.
 - **"Could not be read"**: the error is shown under the source in Settings. The other
-  source and the cached data still work.
+  sources and the cached data still work.
 - **"The Burnless engine was not found"**: rebuild with `./scripts/build-app.sh`. For
   `swift run`, build the engine first (`./scripts/dev.sh` does both), or set
   `BURNLESS_ENGINE=/path/to/burnless-engine`.
@@ -254,7 +265,8 @@ between the two runs.
 ## Demo mode
 
 `open dist/Burnless.app --args --demo` shows generated sample data with a visible
-banner. Demo data is never written to the cache. Screenshot options use environment
+banner. Demo data is never written to the cache, and demo mode uses its own settings
+(it neither reads nor changes yours). Captures render invisibly in the background. Screenshot options use environment
 variables (`BURNLESS_CAPTURE`, `BURNLESS_ROUTE`, `BURNLESS_PERIOD`,
 `BURNLESS_APPEARANCE`, `BURNLESS_WINDOW_SIZE`); see `scripts/capture.sh`.
 
