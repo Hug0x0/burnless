@@ -123,7 +123,8 @@ struct DashboardView: View {
       Text(
         store.isLoading || !store.didLoad
           ? "Burnless is reading your Claude Code, Codex and Gemini CLI logs on this Mac."
-          : "Check the source folders in Settings, then refresh.")
+          // The error notice above already says what went wrong.
+          : store.lastError != nil ? "See the message above." : "Check the source folders in Settings, then refresh.")
     }
     .frame(maxWidth: .infinity, minHeight: 420)
   }

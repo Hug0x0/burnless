@@ -211,9 +211,16 @@ private struct CompactOverview: View {
         .labelsHidden().fixedSize()
       }
       if store.snapshot == nil {
-        Text(store.isLoading ? "Reading your local usage…" : "No usage report yet.")
-          .font(.system(size: 14)).foregroundStyle(BurnTheme.quotaMuted)
-          .frame(maxWidth: .infinity, minHeight: 160)
+        VStack(spacing: 8) {
+          Text(store.isLoading ? "Reading your local usage…" : "No usage report yet.")
+            .font(.system(size: 14)).foregroundStyle(BurnTheme.quotaMuted)
+          if !store.isLoading, let error = store.lastError {
+            Text(error).font(.system(size: 12)).foregroundStyle(BurnTheme.warning)
+              .multilineTextAlignment(.center)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .frame(maxWidth: .infinity, minHeight: 160)
       } else {
         HStack(alignment: .top, spacing: 16) {
           PopoverMetric(title: "Total spend", value: Format.spend(dashboard.totals), detail: store.periodLabel(for: nil) + " · API-equivalent")

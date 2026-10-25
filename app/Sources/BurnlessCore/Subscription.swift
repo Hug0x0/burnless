@@ -57,7 +57,7 @@ public enum PlanCatalog {
     case "plus": return SubscriptionPlan(name: "Plus", pricePerMonth: 20, detected: planType)
     case "pro": return SubscriptionPlan(name: "Pro", pricePerMonth: 200, detected: planType)
     // `prolite` is the $100 Pro tier (5× Plus on Codex), launched April 2026.
-    case "prolite": return SubscriptionPlan(name: "Pro 5×", pricePerMonth: 100, detected: planType)
+    case "prolite", "pro5x": return SubscriptionPlan(name: "Pro 5×", pricePerMonth: 100, detected: planType)
     default: return SubscriptionPlan(name: readable(planType), detected: planType)
     }
   }
@@ -95,7 +95,7 @@ public enum PlanCatalog {
     let known =
       switch harness {
       case .claude, .gemini: named.pricePerMonth != nil
-      case .codex: ["plus", "pro", "prolite"].contains(normalized(text))
+      case .codex: ["plus", "pro", "prolite", "pro5x"].contains(normalized(text))
       }
     guard known else {
       var kept = plan

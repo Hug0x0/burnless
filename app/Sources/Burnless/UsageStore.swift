@@ -309,6 +309,9 @@ enum LivePacing {
     quotaLoop = Task { [weak self] in
       while !Task.isCancelled {
         await self?.runQuotaCheck(hard: false)
+        // A menu bar app can run for weeks; the daily update check rides
+        // along (it does nothing unless enabled and a day has passed).
+        if let settings = self?.settings { UpdateChecker.shared.checkIfDue(settings: settings) }
         try? await Task.sleep(for: .seconds(60))
       }
     }

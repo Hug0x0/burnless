@@ -267,6 +267,7 @@ func reading(
       #expect(PlanCatalog.apply(typed, to: SubscriptionPlan(), harness: .claude).pricePerMonth == 200)
     }
     #expect(PlanCatalog.apply("Max 5", to: SubscriptionPlan(), harness: .claude).name == "Max 5×")
+    #expect(PlanCatalog.apply("pro-5x", to: SubscriptionPlan(), harness: .codex).pricePerMonth == 100)
     #expect(PlanCatalog.apply("  ", to: lite, harness: .codex) == lite)
     #expect(PlanCatalog.apply("-5", to: lite, harness: .codex).pricePerMonth == 100)
   }

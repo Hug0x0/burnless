@@ -54,7 +54,8 @@ private struct GeneralSettings: View {
           "Launch at login",
           isOn: Binding(get: { loginItem.isEnabled }, set: { value in Task { await loginItem.setEnabled(value) } })
         )
-        .disabled(loginItem.isUpdating)
+        // Demo mode never registers real login or background items.
+        .disabled(loginItem.isUpdating || store.isDemo)
         ServiceStatusText(item: loginItem, approval: "Allow Burnless in System Settings → Login Items to finish.")
       } header: {
         Text("Startup")
@@ -278,7 +279,7 @@ private struct QuotaSettings: View {
         Text("Plans")
       } footer: {
         Text(
-          "Detected from ~/.claude.json and Codex's logs. Gemini CLI logs no plan: enter plus, pro or ultra (Google AI plans). Enter a monthly price (for example 200) or a plan name (pro, max-5x, max-20x, plus) to override a plan. Unknown prices are left blank, never treated as $0."
+          "Detected from ~/.claude.json and Codex's logs. Gemini CLI logs no plan: enter plus, pro or ultra (Google AI plans). Enter a monthly price (for example 200) or a plan name to override a plan: pro, max-5x or max-20x for Claude; plus, pro-5x or pro for Codex. Unknown prices are left blank, never treated as $0."
         )
         .font(.caption).foregroundStyle(.secondary)
       }
@@ -349,7 +350,7 @@ private struct LiveStateText: View {
       case .ok: ("Live", .green)
       case .off: ("Paused", .secondary)
       case .noSignIn: ("No readable sign-in", BurnTheme.warning)
-      case .signInExpired: ("Sign-in expired · open the app to renew", BurnTheme.warning)
+      case .signInExpired: ("Sign-in expired · run the CLI once to renew it", BurnTheme.warning)
       case .unauthorized: ("Sign-in refused", .red)
       case .rateLimited: ("Rate limited · retrying later", BurnTheme.warning)
       case .failed: ("Request failed · using saved data", BurnTheme.warning)
@@ -361,6 +362,7 @@ private struct LiveStateText: View {
 // MARK: - Background
 
 private struct BackgroundSettings: View {
+  @Environment(UsageStore.self) private var store
   @State private var agent = ServiceToggle.collector()
 
   var body: some View {
@@ -370,7 +372,7 @@ private struct BackgroundSettings: View {
           "Collect limits every minute",
           isOn: Binding(get: { agent.isEnabled }, set: { value in Task { await agent.setEnabled(value) } })
         )
-        .disabled(agent.isUpdating)
+        .disabled(agent.isUpdating || store.isDemo)
         ServiceStatusText(item: agent, approval: "Allow Burnless to run in the background in System Settings → Login Items.")
       } header: {
         Text("Background quota history")
@@ -448,6 +450,7 @@ private struct UpdateSettings: View {
     Form {
       Section {
         Toggle("Automatically check for updates", isOn: $settings.checkForUpdates)
+          .onChange(of: settings.checkForUpdates) { checker.checkIfDue(settings: settings) }
         HStack {
           Button("Check for Updates…") { Task { await checker.check() } }.disabled(checker.isChecking)
           Spacer()
