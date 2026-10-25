@@ -868,7 +868,7 @@ fn latest_logged_codex() -> Option<(CodexSnapshot, Option<String>, Option<i64>)>
         .into_iter()
         .filter_map(|file| Some((fs::metadata(&file).ok()?.modified().ok()?, file)))
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
     files
         .iter()
         .take(CODEX_FILES_SCANNED)
